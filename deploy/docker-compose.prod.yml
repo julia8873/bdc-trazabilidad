@@ -1,0 +1,13 @@
+# Fichero de orquestación de producción
+# Este fichero constituye la única costura de infraestructura entre
+# bdc-trazabilidad y llm-wiki-assistant.
+# Ver docs/integracion-bdc.md para detalles y procedimiento de reversión.
+
+include:
+  - path: ../../llm-wiki-assistant/docker-compose.yml
+
+# Los servicios de bdc-trazabilidad se definirán aquí en fases futuras.
+# Ejemplo (desactivado por ahora):
+# services:
+#   metrics-api:
+#     build: ./metrics-api
