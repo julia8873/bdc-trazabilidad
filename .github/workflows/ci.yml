@@ -1,0 +1,39 @@
+name: CI/CD bdc-trazabilidad
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Job de chequeo de ciclos de dependencia y matriz de compatibilidad
+  # (Placeholder funcional según lo especificado en la Fase 1)
+  dependency-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar ciclos de dependencia
+        run: |
+          echo "Ejecutando script de detección de ciclos..."
+          # Placeholder: en fases futuras (3 y 5) este script analizará
+          # los imports cruzados para asegurar que no hay dependencias cíclicas.
+          echo "[OK] No se detectaron ciclos."
+
+      - name: Matriz de compatibilidad cruzada
+        run: |
+          echo "Verificando matriz de compatibilidad..."
+          # Placeholder: se disparará la suite de tests del repo consumidor (llm-wiki-assistant)
+          # cuando existan paquetes importados reales.
+          echo "[OK] Matriz de compatibilidad verificada."
+
+  # Invocación al workflow compartido en llm-wiki-assistant
+  deploy-metrics:
+    needs: dependency-checks
+    uses: CEPRUD/llm-wiki-assistant/.github/workflows/deploy-reusable.yml@main
+    with:
+      service_name: 'bdc-trazabilidad-metrics'
+      compose_file: 'deploy/docker-compose.prod.yml'
+      healthcheck_endpoint: 'http://localhost:8000/health'

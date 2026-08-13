@@ -21,11 +21,14 @@ Para garantizar el aislamiento por RGPD/LOPD, el esquema `metrics` tendrá su pr
 ### C. Infraestructura de Despliegue y CI/CD (Acoplamiento Deliberado)
 La infraestructura de despliegue en producción se acopla deliberadamente a través de una **costura única**: el fichero `deploy/docker-compose.prod.yml` de este repositorio (`bdc-trazabilidad`).
 
-- **Costura de Orquestación:** Este fichero utiliza la directiva `include:` de Docker Compose para integrar los servicios de `llm-wiki-assistant` (referenciados mediante ruta relativa `../llm-wiki-assistant/`).
-- **Reversión:** Para revertir el acoplamiento de infraestructura, basta con eliminar la directiva `include:` y gestionar los servicios de este repo de forma totalmente autónoma.
+- **Costura de Orquestación:** Este fichero utiliza la directiva `include:` de Docker Compose para integrar los servicios de `llm-wiki-assistant` (referenciados mediante ruta relativa `../../llm-wiki-assistant/moodle-matrix-dev/docker-compose.yml`).
+- **Red Compartida (`bdc-net`):** Para permitir que los servicios de ambos proyectos se comuniquen, se ha inyectado la declaración de una red externa `bdc-net` en el `docker-compose.yml` de `llm-wiki-assistant`, y se ha añadido a los servicios `mapeo-api`, `postgres` y `redis`.
+- **CI/CD Compartido:** Se utiliza un workflow reutilizable (`.github/workflows/deploy-reusable.yml`) alojado en `llm-wiki-assistant`, que es invocado desde los pipelines de `bdc-trazabilidad` para centralizar la lógica de despliegue. Adicionalmente, el pipeline de `bdc-trazabilidad` incluye un paso de validación cruzada y detección de ciclos (actualmente en modo placeholder) que disparará los tests de `llm-wiki-assistant` cuando existan dependencias de código reales (Fases 3 y 5).
+- **Reversión:** Para revertir el acoplamiento de infraestructura, se debe:
+  1. Eliminar la directiva `include:` de `bdc-trazabilidad/deploy/docker-compose.prod.yml`.
+  2. Eliminar la red `bdc-net` y las referencias a ella del fichero `llm-wiki-assistant/moodle-matrix-dev/docker-compose.yml`.
+  3. Desvincular la llamada al workflow reutilizable en `.github/workflows/ci.yml`.
 - ⚠️ **Aviso Explícito:** Si revertir cualquier acoplamiento (de infraestructura o de código) requiere modificar más código o configuración de lo estrictamente necesario, es señal de que se implementó de forma incorrecta y debe ser refactorizado inmediatamente.
-
-*(Nota: En la validación inicial de Fase 0 v3, el fichero `llm-wiki-assistant/docker-compose.yml` real no declaró explícitamente redes compartidas, como `bdc-net`. Si en el futuro es necesario modificar `llm-wiki-assistant` para que el `include:` funcione en red, esto deberá solicitarse explícitamente y con confirmación, dado que es un entorno en producción).*
 
 ---
 

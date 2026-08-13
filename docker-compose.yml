@@ -1,0 +1,34 @@
+version: '3.8'
+
+networks:
+  bdc-net:
+    external: true
+
+services:
+  metrics-api:
+    image: alpine:latest
+    command: ["sh", "-c", "echo 'metrics-api running' && nc -l -p 8000"]
+    networks:
+      - bdc-net
+    environment:
+      - MOCK_SERVICES=${MOCK_SERVICES:-true}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379/0
+
+  metrics-worker:
+    image: alpine:latest
+    command: ["sh", "-c", "echo 'metrics-worker running' && sleep infinity"]
+    networks:
+      - bdc-net
+    environment:
+      - MOCK_SERVICES=${MOCK_SERVICES:-true}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379/0
+
+  frontend:
+    image: alpine:latest
+    command: ["sh", "-c", "echo 'frontend running' && sleep infinity"]
+    networks:
+      - bdc-net
+    environment:
+      - MOCK_SERVICES=${MOCK_SERVICES:-true}

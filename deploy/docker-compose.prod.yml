@@ -4,7 +4,7 @@
 # Ver docs/integracion-bdc.md para detalles y procedimiento de reversión.
 
 include:
-  - path: ../../llm-wiki-assistant/docker-compose.yml
+  - path: ../../llm-wiki-assistant/moodle-matrix-dev/docker-compose.yml
 
 # Los servicios de bdc-trazabilidad se definirán aquí en fases futuras.
 # Ejemplo (desactivado por ahora):
