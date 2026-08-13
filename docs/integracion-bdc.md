@@ -59,3 +59,18 @@ Cuando se requiera importar código de un repositorio a otro, se utilizará un m
 |           |                |        |                |       |                           |
 
 *(Esta tabla se rellenará en futuras fases conforme se implementen dependencias cruzadas reales).*
+
+## 6. Pruebas de Integración y Compatibilidad Cruzada (CI/CD)
+
+Para garantizar la integridad del sistema multi-repositorio, la Fase 1 estableció verificaciones de CI/CD simuladas pero funcionales para evitar roturas accidentales entre `bdc-trazabilidad` y `llm-wiki-assistant`:
+
+### Matriz de Compatibilidad (Cross-Repo Test)
+Si un paquete o componente compartido se modifica en el repositorio proveedor (`llm-wiki-assistant`), su pipeline CI dispara un evento `repository_dispatch` (tipo `cross-repo-test`) hacia el repositorio consumidor (`bdc-trazabilidad`). 
+El consumidor ejecuta inmediatamente su suite de tests contra la nueva versión (validado con el script `scripts/test_compat_matrix.sh`). 
+- **Caso OK:** Si los tests pasan, el CI valida la compatibilidad.
+- **Caso FAIL:** Si la nueva versión introduce *breaking changes*, los tests fallan y el CI del consumidor notifica o bloquea, previniendo que la regresión llegue a producción.
+
+### Detección de Ciclos de Dependencia
+El script `scripts/detect_cycles.sh` en `bdc-trazabilidad` analiza el grafo de dependencias declaradas entre los módulos durante la ejecución normal del pipeline CI.
+- **Caso OK:** Grafo acíclico, el CI continúa.
+- **Caso FAIL:** Si se detecta un ciclo (ej. A -> B -> A), el script fuerza un exit code `1`, abortando el pipeline tempranamente con un mensaje explícito que identifica el ciclo detectado.

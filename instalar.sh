@@ -18,7 +18,7 @@ if [ "$MODE" = "production" ] || [ "$MODE" = "--env=production" ]; then
     
     # Comprobar postgres
     if ! docker run --rm --network bdc-net alpine nc -z postgres 5432; then
-        echo "ERROR: Postgres (db) no está disponible en bdc-net."
+        echo "ERROR: Postgres (postgres) no está disponible en bdc-net."
         exit 1
     fi
     echo "  [OK] Postgres detectado."

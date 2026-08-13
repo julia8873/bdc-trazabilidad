@@ -5,29 +5,34 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  repository_dispatch:
+    types: [ cross-repo-test ]
 
 jobs:
-  # Job de chequeo de ciclos de dependencia y matriz de compatibilidad
-  # (Placeholder funcional según lo especificado en la Fase 1)
   dependency-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout bdc-trazabilidad
         uses: actions/checkout@v4
+        with:
+          path: bdc-trazabilidad
+
+      - name: Checkout llm-wiki-assistant
+        uses: actions/checkout@v4
+        with:
+          repository: julia8873/llm-wiki-assistant
+          path: llm-wiki-assistant
 
       - name: Verificar ciclos de dependencia
         run: |
-          echo "Ejecutando script de detección de ciclos..."
-          # Placeholder: en fases futuras (3 y 5) este script analizará
-          # los imports cruzados para asegurar que no hay dependencias cíclicas.
-          echo "[OK] No se detectaron ciclos."
+          cd bdc-trazabilidad
+          python3 scripts/detect_cycles.py
 
       - name: Matriz de compatibilidad cruzada
         run: |
-          echo "Verificando matriz de compatibilidad..."
-          # Placeholder: se disparará la suite de tests del repo consumidor (llm-wiki-assistant)
-          # cuando existan paquetes importados reales.
-          echo "[OK] Matriz de compatibilidad verificada."
+          cd bdc-trazabilidad
+          chmod +x scripts/test_compat_matrix.sh
+          ./scripts/test_compat_matrix.sh
 
   # Invocación al workflow compartido en llm-wiki-assistant
   deploy-metrics:

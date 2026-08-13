@@ -5,9 +5,4 @@
 
 include:
   - path: ../../llm-wiki-assistant/moodle-matrix-dev/docker-compose.yml
-
-# Los servicios de bdc-trazabilidad se definirán aquí en fases futuras.
-# Ejemplo (desactivado por ahora):
-# services:
-#   metrics-api:
-#     build: ./metrics-api
+  - path: ../docker-compose.yml

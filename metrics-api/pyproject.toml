@@ -1,0 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metrics-api"
+version = "0.1.0"
+description = "API de métricas"
+dependencies = [
+    "shared-pkg"
+]
