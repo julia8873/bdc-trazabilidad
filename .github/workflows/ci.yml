@@ -22,6 +22,7 @@ jobs:
         with:
           repository: julia8873/llm-wiki-assistant
           path: llm-wiki-assistant
+          ref: ${{ github.event.client_payload.version || 'main' }}
 
       - name: Verificar ciclos de dependencia
         run: |
