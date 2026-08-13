@@ -7,5 +7,13 @@ name = "metrics-api"
 version = "0.1.0"
 description = "API de métricas"
 dependencies = [
-    "shared-pkg"
+    # TODO (Fase 3): Al implementar la dependencia real, fijar la versión exacta 
+    # (ej. "shared-pkg==1.0.0") para cumplir con la Regla 3 del plan maestro.
+    "shared-pkg",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",
+    "pytest>=8.0",
+    "requests>=2.31",
+    "responses>=0.25"
 ]
