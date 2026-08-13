@@ -31,9 +31,12 @@ jobs:
 
       - name: Matriz de compatibilidad cruzada
         run: |
+          pwd
+          ls -la ../../
+          ls -la ../../llm-wiki-assistant || echo "NO EXISTE"
           cd bdc-trazabilidad/metrics-worker
           pip install tenacity pytest pytest-asyncio pytest-mock
-          PYTHONPATH=${GITHUB_WORKSPACE}/llm-wiki-assistant/shared-pkg pytest tests/test_compat.py
+          PYTHONPATH=../../llm-wiki-assistant/shared-pkg pytest tests/test_compat.py
 
   # Invocación al workflow compartido en llm-wiki-assistant
   deploy-metrics:
