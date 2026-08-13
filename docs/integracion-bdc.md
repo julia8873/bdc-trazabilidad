@@ -60,9 +60,7 @@ Cuando se requiera importar código de un repositorio a otro, se utilizará un m
 
 | Dirección | Módulo/función | Motivo | Versión fijada | Fecha | Procedimiento de rollback |
 |-----------|----------------|--------|----------------|-------|---------------------------|
-|           |                |        |                |       |                           |
-
-*(Esta tabla se rellenará en futuras fases conforme se implementen dependencias cruzadas reales).*
+| `llm-wiki-assistant` -> `bdc-trazabilidad` | `shared-pkg.okf_contract` | Extraer strings mágicas (mensajes de commit y rutas) para parseo de eventos de log e ingestión OKF sin acoplar la lógica completa de Git. | `1.0.0` | 2026-08-13 | Revertir el uso de `shared-pkg.okf_contract` en `metrics-worker/worker.py` y restaurar variables hardcodeadas locales. |
 
 ## 6. Pruebas de Integración y Compatibilidad Cruzada (CI/CD)
 
