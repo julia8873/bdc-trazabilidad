@@ -37,7 +37,7 @@ jobs:
   # Invocación al workflow compartido en llm-wiki-assistant
   deploy-metrics:
     needs: dependency-checks
-    uses: CEPRUD/llm-wiki-assistant/.github/workflows/deploy-reusable.yml@main
+    uses: julia8873/llm-wiki-assistant/.github/workflows/deploy-reusable.yml@main
     with:
       service_name: 'bdc-trazabilidad-metrics'
       compose_file: 'deploy/docker-compose.prod.yml'
