@@ -1,0 +1,8 @@
+# Doxyfile mínimo para bdc-trazabilidad
+PROJECT_NAME           = "bdc-trazabilidad"
+OUTPUT_DIRECTORY       = docs/doxygen
+WARN_AS_ERROR          = YES
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+INPUT                  = metrics-api metrics-worker frontend scripts
+RECURSIVE              = YES
