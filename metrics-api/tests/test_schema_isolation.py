@@ -17,6 +17,7 @@ def test_metrics_user_cannot_read_public_mapeos():
             session.execute(text("SELECT * FROM public.mapeos"))
         
         # psycopg2 throws ProgrammingError for permission denied
-        assert "permission denied for table mapeos" in str(exc_info.value)
+        error_msg = str(exc_info.value)
+        assert "permission denied for table mapeos" in error_msg or "permission denied for schema public" in error_msg
     finally:
         session.close()

@@ -25,3 +25,14 @@ def test_schema_version_is_set():
         assert len(version) > 0
     finally:
         session.close()
+
+def test_health_endpoint(client):
+    """
+    Verifica que el endpoint /health devuelve status ok y la versión del esquema.
+    """
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "schema_version" in data
+    assert data["schema_version"] is not None

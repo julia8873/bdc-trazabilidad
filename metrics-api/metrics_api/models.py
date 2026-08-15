@@ -119,9 +119,41 @@ class EventoSync(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    moodle_user_id = Column(Integer, nullable=True)
+    moodle_course_id = Column(Integer, nullable=True)
+    commit_sha = Column(String, nullable=True)
     tipo_evento = Column(String, nullable=False)
     estado = Column(String, nullable=False)
     resultado = Column(JSONB, nullable=True)
+
+
+class DiscrepanciaAuditoria(Base):
+    """
+    Registro de discrepancias detectadas por el auditor de GitHub.
+    """
+    __tablename__ = "discrepancias_auditoria"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    moodle_user_id = Column(Integer, nullable=True)
+    moodle_course_id = Column(Integer, nullable=True)
+    commit_sha = Column(String, nullable=False, index=True)
+    tipo_discrepancia = Column(String, nullable=False)
+    detalles = Column(JSONB, nullable=True)
+
+
+class AuditoriaEstado(Base):
+    """
+    Guarda el cursor (último commit timestamp verificado) para auditoría incremental.
+    """
+    __tablename__ = "auditoria_estado"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    moodle_user_id = Column(Integer, nullable=False)
+    moodle_course_id = Column(Integer, nullable=False)
+    repo_owner = Column(String, nullable=False)
+    repo_name = Column(String, nullable=False)
+    last_audited_timestamp = Column(DateTime, nullable=False)
 
 
 class Reversion(Base):
@@ -143,3 +175,18 @@ class Reversion(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
     interaccion = relationship("Interaccion", back_populates="reversiones")
+
+
+class AuditoriaAcceso(Base):
+    """
+    Registro inmutable de intentos de acceso a recursos de la API.
+    A nivel de BD, un TRIGGER impide UPDATE o DELETE (append-only estricto).
+    """
+    __tablename__ = "auditoria_accesos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    moodle_username = Column(String, index=True, nullable=False)
+    recurso = Column(String, nullable=False)
+    resultado = Column(String, nullable=False)
+    metadatos = Column(JSONB, nullable=True)

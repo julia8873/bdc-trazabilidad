@@ -110,3 +110,42 @@ El punto 9.4 del plan maestro (revisión RGPD/LOPD con servicios jurídicos de l
 
 Ver documentación completa del esquema en [`docs/esquema-metrics.md`](./esquema-metrics.md).
 
+---
+
+## 9. Estado de la Fase 6.5 — Auditoría de GitHub (Reconciliación)
+
+**Estado: Completada**
+
+Se ha integrado el trabajador `worker.py` en `metrics-worker` para monitorizar y reconciliar los eventos procedentes de GitHub. 
+Se ha descartado la premisa original del plan de usar una base de datos SQLite por-alumno para el buffer local del bot. 
+
+### Arquitectura de Reconciliación en 2 Capas (Bucles)
+
+1. **Bucle 1 (Feed Consumer - Capa 1):** Un ciclo de alta frecuencia (`POLL_INTERVAL_SEC` = 30s) que hace `GET /eventos-recientes` sobre `mapeo-api` para sincronizar eventos rápidamente en `eventos_sync` (vía ingesta rápida originada en el POST del bot, que preserva el buffer `.jsonl` como red de seguridad).
+2. **Bucle 2 (Reconciliación/Auditor - Capa 2):** Un ciclo de baja frecuencia (`RECONCILIATION_INTERVAL_SEC` = 1 día) que verifica proactivamente cada fork en la API de GitHub para asegurar que todos los commits reales del historial de GitHub existen en `eventos_sync`. Si falta alguno, se genera una `DiscrepanciaAuditoria`.
+
+**Decisiones Clave de Diseño y Límites (Rate Limit):**
+- El intervalo de 1 día (86400s) está justificado estrictamente por el límite de 5000 peticiones/hora de la API autenticada de GitHub, considerando el paginado del historial para N forks de estudiantes. Modificar esta frecuencia en el futuro requerirá recalcular el presupuesto de peticiones.
+- El POST a `/eventos` reportado por el bot siempre va atado al `commit_sha` real, permitiendo trazar 1 a 1 la interacción desde el bot hasta el histórico del repositorio.
+- Las tablas residen físicamente en `mapeo_db` y el worker se conecta por conexión de red interna Docker. 
+
+**Cumplimiento LOPD/RGPD**: 
+Dado que el worker audita directamente sobre los forks en la organización GitHub docente, se reitera que el acceso debe limitarse a la organización formal autorizada de la UGR y debe evaluarse frente al punto 9.4 del plan maestro antes de producción.
+
+---
+
+## 10. Arquitectura de Integración Final (End-to-End)
+
+**Estado: Completada**
+
+El flujo End-to-End (E2E) consolidado integra Moodle, Matrix (Synapse/Maubot), y los paneles de control de métricas bajo la siguiente arquitectura definitiva:
+
+1. **Aprovisionamiento desde Moodle:** 
+   El plugin `block_bdc` en Moodle es el punto de entrada. Al pulsar "Sincronizar", Moodle llama a `mapeo-api` para asegurar la creación del repositorio GitHub del estudiante y crear una sala de chat en Matrix (`Synapse Admin API`). Esto garantiza que solo los estudiantes formalmente matriculados dispongan de entorno.
+2. **Autojoin del Bot (Matrix):** 
+   Se utiliza la funcionalidad nativa de autojoin de Maubot a nivel de cliente (configurada directamente en la instancia de Maubot) en lugar de eventos de invitación a nivel de código de plugin, garantizando la estabilidad y evitando errores de tipos de eventos (`ROOM_INVITE` inexistente).
+3. **Flujo de Interacciones:** 
+   El asistente (Maubot `llm_wiki_bot`) escucha en las salas conectadas. Al recibir interacción de un estudiante, procesa el documento, sincroniza el estado a GitHub (`push`) y paralelamente reporta el evento estructurado a la API de mapeos, la cual asienta el registro en `metrics.interacciones`.
+4. **Seguridad y Aislamiento en el Dashboard:** 
+   `bdc-trazabilidad` requiere inicio de sesión. Utiliza tokens JWT generados contra Moodle para validar la identidad y extrae los `allowed_courses` (cursos donde el profesor tiene docencia) desde `mapeo-api`. El backend (`metrics-api`) restringe de forma estricta (`auth.py`) que el usuario únicamente pueda solicitar y visualizar datos de `metrics.interacciones` para los cursos a los que está autorizado, asegurando un aislamiento total entre profesores y estudiantes.
+
