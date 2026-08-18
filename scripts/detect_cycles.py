@@ -4,6 +4,8 @@ import sys
 import tomllib
 import glob
 
+import re
+
 def find_tomls(base_dirs):
     tomls = []
     for d in base_dirs:
@@ -12,8 +14,10 @@ def find_tomls(base_dirs):
                 tomls.append(os.path.join(root, "pyproject.toml"))
     return tomls
 
-def build_graph(tomls):
+def build_graph(tomls, workspace_root):
     graph = {}
+    
+    # 1. Parse from pyproject.toml
     for t in tomls:
         with open(t, "rb") as f:
             data = tomllib.load(f)
@@ -21,12 +25,31 @@ def build_graph(tomls):
             if not name:
                 continue
             deps = data.get("project", {}).get("dependencies", [])
-            # Extract basic package name assuming PEP 508 format (e.g. "pkg>=1.0" -> "pkg")
             clean_deps = []
             for d in deps:
                 pkg = d.split(">")[0].split("<")[0].split("=")[0].split("~")[0].strip()
                 clean_deps.append(pkg)
-            graph[name] = clean_deps
+            if name not in graph:
+                graph[name] = []
+            graph[name].extend(clean_deps)
+
+    # 2. Parse from integracion-bdc.md table
+    md_path = os.path.join(workspace_root, "bdc-trazabilidad", "docs", "integracion-bdc.md")
+    if os.path.exists(md_path):
+        with open(md_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("|") and "->" in line:
+                    parts = [p.strip() for p in line.split("|")]
+                    if len(parts) >= 3:
+                        direction = parts[1]
+                        if "->" in direction:
+                            left, right = [x.strip() for x in direction.split("->")]
+                            # llm-wiki-assistant -> bdc-trazabilidad means bdc-trazabilidad depends on llm-wiki-assistant
+                            provider, consumer = left, right
+                            if consumer not in graph:
+                                graph[consumer] = []
+                            graph[consumer].append(provider)
     return graph
 
 def has_cycle(graph):
@@ -60,24 +83,20 @@ def has_cycle(graph):
     return None
 
 if __name__ == "__main__":
-    # Scan both repositories
     workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     base_dirs = [
         os.path.join(workspace_root, "bdc-trazabilidad"),
         os.path.join(workspace_root, "llm-wiki-assistant")
     ]
     
-    print("Analizando dependencias en pyproject.toml...")
+    print("Analizando dependencias en pyproject.toml y docs/integracion-bdc.md...")
     tomls = find_tomls(base_dirs)
-    if not tomls:
-        print("[OK] No se encontraron manifiestos.")
-        sys.exit(0)
         
-    graph = build_graph(tomls)
+    graph = build_graph(tomls, workspace_root)
     
     cycle = has_cycle(graph)
     if cycle:
-        print("[ERROR] Dependencia cíclica detectada en el grafo de módulos:")
+        print("[ERROR] Dependencia cíclica detectada en el grafo:")
         print(" -> ".join(cycle))
         sys.exit(1)
         

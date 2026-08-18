@@ -5,12 +5,14 @@ from uuid import UUID
 
 # Genéricos de paginación
 class PaginatedResponse(BaseModel):
+    """Respuesta paginada."""
     items: List[Any]
     total: int
     limit: int
     offset: int
 
 class InteractionRead(BaseModel):
+    """Lectura de interaccion."""
     id: UUID
     timestamp: datetime
     moodle_user_id: int
@@ -20,25 +22,30 @@ class InteractionRead(BaseModel):
     metadatos: Optional[Dict[str, Any]] = None
 
     class Config:
+        """Configuracion pydantic."""
         from_attributes = True
 
 class PaginatedInteractions(PaginatedResponse):
+    """Interacciones paginadas."""
     items: List[InteractionRead]
 
 # Agregados
 class CourseMetricsResponse(BaseModel):
+    """Modelo para metricas de curso."""
     course_id: int
     total_interactions: int
     interactions_by_type: Dict[str, int]
     percentiles: Dict[str, Any] = {}
 
 class StudentMetricsResponse(BaseModel):
+    """Modelo para metricas de estudiante."""
     student_id: int
     course_id: int
     total_interactions: int
     interactions_by_type: Dict[str, int]
 
 class StudentCourseItem(BaseModel):
+    """Item de curso para estudiante."""
     moodle_user_id: int
     moodle_username: str
     repo_url: Optional[str]
@@ -47,5 +54,6 @@ class StudentCourseItem(BaseModel):
     estado_sincronizacion: str = "OK"
 
 class CourseStudentsResponse(BaseModel):
+    """Modelo para lista de estudiantes."""
     course_id: int
     students: List[StudentCourseItem]

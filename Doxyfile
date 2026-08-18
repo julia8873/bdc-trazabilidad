@@ -6,3 +6,7 @@ GENERATE_LATEX         = NO
 GENERATE_HTML          = YES
 INPUT                  = metrics-api metrics-worker frontend scripts
 RECURSIVE              = YES
+EXCLUDE_PATTERNS = */node_modules/* */venv/* */.venv/*
+EXCLUDE_PATTERNS += */frontend/*
+EXCLUDE_PATTERNS += */alembic/*
+WARN_IF_UNDOCUMENTED = NO

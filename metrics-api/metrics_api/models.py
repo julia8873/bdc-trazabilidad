@@ -64,6 +64,10 @@ class Interaccion(Base):
     concretas de este campo.
     """
     __tablename__ = "interacciones"
+    __table_args__ = (
+        UniqueConstraint("referencia_evento", name="uq_interaccion_referencia_evento"),
+        {"schema": "metrics"},
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
@@ -190,3 +194,19 @@ class AuditoriaAcceso(Base):
     recurso = Column(String, nullable=False)
     resultado = Column(String, nullable=False)
     metadatos = Column(JSONB, nullable=True)
+
+class RefreshToken(Base):
+    """
+    Registro de sesiones (refresh tokens) para persistencia segura.
+    Almacena el hash del token, no el valor en claro.
+    """
+    __tablename__ = "refresh_tokens"
+    __table_args__ = {"schema": "metrics"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    moodle_user_id = Column(Integer, index=True, nullable=False)
+    token_hash = Column(String, unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Integer, default=0, nullable=False) # 0=False, 1=True
+    created_at = Column(DateTime, default=datetime.utcnow)
+

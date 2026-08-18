@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
-import { API_URL } from '../lib/api';
+import { apiClient } from '../lib/apiClient';
 import type { StudentMetrics, PaginatedInteractions } from '../lib/api';
 import { BookOpen, Activity } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -25,10 +25,9 @@ export const StudentProfile: React.FC = () => {
     const fetchStudentData = async () => {
       try {
         setLoading(true);
-        const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
         const [mRes, iRes] = await Promise.all([
-          fetch(`${API_URL}/metrics/course/${courseId}/student/${studentId}`, { headers }),
-          fetch(`${API_URL}/metrics/course/${courseId}/student/${studentId}/interactions?limit=10`, { headers })
+          apiClient(`/v1/metrics/course/${courseId}/student/${studentId}`),
+          apiClient(`/v1/metrics/course/${courseId}/student/${studentId}/interactions?limit=10`)
         ]);
 
         if (mRes.status === 403) throw new Error('Acceso denegado a métricas del alumno');

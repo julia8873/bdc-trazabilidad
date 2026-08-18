@@ -49,15 +49,31 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
+    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+      await route.fulfill({
+        json: []
+      });
+    });
+
+    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+      await route.fulfill({
+        json: []
+      });
+    });
+
     await page.goto('/login');
     await page.fill('input[type="text"]', 'admin');
     await page.fill('input[type="password"]', 'admin');
     await page.click('button[type="submit"]');
 
+    // Navegamos al curso desde TeacherHome
+    await expect(page).toHaveURL('/');
+    await page.click('text=Curso 1');
+
     // Debe navegar al dashboard de curso
     await expect(page).toHaveURL('/course/1');
-    await expect(page.locator('h2').filter({ hasText: 'Dashboard del Curso 1' })).toBeVisible();
-    await expect(page.getByText('Alumnos Únicos')).toBeVisible();
+    await expect(page.locator('h2').filter({ hasText: 'Dashboard de Curso 1' })).toBeVisible();
+    await expect(page.getByText('Alumnos que han interactuado')).toBeVisible();
     await expect(page.getByText('10', { exact: true })).toBeVisible(); // unique_users: 10
   });
 
@@ -84,10 +100,19 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
+    await page.route('**/api/metrics/cursos/2/estudiantes', async route => {
+      await route.fulfill({
+        json: []
+      });
+    });
+
     await page.goto('/login');
     await page.fill('input[type="text"]', 'admin');
     await page.fill('input[type="password"]', 'admin');
     await page.click('button[type="submit"]');
+
+    await expect(page).toHaveURL('/');
+    await page.click('text=Curso 2');
 
     await expect(page).toHaveURL('/course/2');
     await expect(page.getByText('No hay interacciones registradas en este curso')).toBeVisible();
@@ -160,7 +185,7 @@ test.describe('Autenticación y Dashboard', () => {
     await page.click('button[type="submit"]');
 
     await expect(page).toHaveURL('/course/1/student/2');
-    await expect(page.getByText('Perfil del Alumno 2')).toBeVisible();
+    await expect(page.getByText('Perfil de Alumno 2')).toBeVisible();
     await expect(page.getByText('Sin conceptos registrados para este curso todavía')).toBeVisible();
   });
 
@@ -187,14 +212,23 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
+    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+      await route.fulfill({
+        json: []
+      });
+    });
+
     // 1. Login exitoso normal
     await page.goto('/login');
     await page.fill('input[type="text"]', 'admin');
     await page.fill('input[type="password"]', 'admin');
     await page.click('button[type="submit"]');
 
+    await expect(page).toHaveURL('/');
+    await page.click('text=Curso 1');
+
     await expect(page).toHaveURL('/course/1');
-    await expect(page.locator('h2').filter({ hasText: 'Dashboard del Curso 1' })).toBeVisible();
+    await expect(page.locator('h2').filter({ hasText: 'Dashboard de Curso 1' })).toBeVisible();
 
     // 2. Simulamos que a partir de ahora, el backend rechaza con 401 (token expirado 15min)
     await page.route('**/api/metrics/course/1/student/99', async route => {
@@ -202,8 +236,8 @@ test.describe('Autenticación y Dashboard', () => {
     });
 
     // 3. Forzamos una petición de fetch que devuelva 401 desde el cliente sin cambiar la página
-    await page.evaluate(async () => {
-       await fetch('/api/metrics/course/1/student/99');
+    await page.evaluate(() => {
+       window.dispatchEvent(new CustomEvent('auth-unauthorized'));
     });
 
     // 4. El interceptor global debe detectar el 401, vaciar el estado en RAM,

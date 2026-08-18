@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { API_URL } from '../lib/api';
+import { apiClient } from '../lib/apiClient';
 import type { CourseMetrics, PaginatedInteractions } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Activity, Users, BarChart3 } from 'lucide-react';
@@ -32,15 +32,9 @@ export const CourseDashboard: React.FC = () => {
       try {
         setLoading(true);
         const [mRes, iRes, sRes] = await Promise.all([
-          fetch(`${API_URL}/metrics/course/${courseId}`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          }),
-          fetch(`${API_URL}/metrics/course/${courseId}/interactions?limit=5`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          }),
-          fetch(`${API_URL}/metrics/cursos/${courseId}/estudiantes`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          })
+          apiClient(`/v1/metrics/course/${courseId}`),
+          apiClient(`/v1/metrics/course/${courseId}/interactions?limit=5`),
+          apiClient(`/v1/metrics/cursos/${courseId}/estudiantes`)
         ]);
 
         if (mRes.status === 403) throw new Error('Acceso denegado a métricas del curso');

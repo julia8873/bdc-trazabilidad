@@ -34,6 +34,9 @@ class MissingCredentialsError(Exception):
     pass
 
 class SyncEventWorker:
+    """
+    Clase principal que implementa el worker de sincronizacion de eventos de GitHub.
+    """
     def __init__(self, use_mock=None):
         self.use_mock = use_mock if use_mock is not None else os.getenv("MOCK_SERVICES", "false").lower() == "true"
         self.semaphore = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENCY", "2")))

@@ -14,6 +14,9 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "changeme_in_production")
 JWT_ALGORITHM = "HS256"
 
 class AuthenticatedUser(BaseModel):
+    """
+    Modelo que representa a un usuario autenticado a traves del token JWT.
+    """
     is_authenticated: bool
     moodle_username: str
     moodle_user_id: Optional[int] = None

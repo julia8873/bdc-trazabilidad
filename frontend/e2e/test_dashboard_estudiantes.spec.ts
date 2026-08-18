@@ -52,11 +52,11 @@ test.describe('Dashboard de Estudiantes', () => {
     await expect(page).toHaveURL('/');
     
     // Hacemos click en la tarjeta del curso 1
-    await page.click('text="Curso 1"');
+    await page.click('text=Curso 1');
 
     // Debe navegar al dashboard de curso
     await expect(page).toHaveURL('/course/1');
-    await expect(page.locator('h2').filter({ hasText: 'Dashboard del Curso 1' })).toBeVisible();
+    await expect(page.locator('h2').filter({ hasText: 'Dashboard de Curso 1' })).toBeVisible();
 
     // 3. Verificar las columnas requeridas en la tabla de alumnos
     const table = page.locator('table').last();

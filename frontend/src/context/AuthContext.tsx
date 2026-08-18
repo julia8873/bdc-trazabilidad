@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import type { UserToken } from '../lib/api';
 import { API_URL } from '../lib/api';
+import { setApiToken } from '../lib/apiClient';
 
 interface AuthContextType {
   token: string | null;
@@ -13,19 +14,32 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [user, setUser] = useState<UserToken | null>(() => {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
+  const [token, setToken] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [user, setUser] = useState<UserToken | null>(null);
+
+  // Initialize from API /refresh on startup
+  useEffect(() => {
+    const initializeAuth = async () => {
       try {
-        return jwtDecode<UserToken>(savedToken);
+        const response = await fetch(`${API_URL}/refresh`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setApiToken(data.access_token);
+          setToken(data.access_token);
+          setUser(jwtDecode<UserToken>(data.access_token));
+        }
       } catch (e) {
-        localStorage.removeItem('token');
-        return null;
+        console.error("Initialization refresh failed", e);
+      } finally {
+        setIsInitializing(false);
       }
-    }
-    return null;
-  });
+    };
+    initializeAuth();
+  }, []);
 
   const login = (newToken: string) => {
     try {
@@ -33,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // (decidir qué menús mostrar). Toda decisión de autorización real se revalida
       // en el backend (verify_token) validando la firma del JWT en cada request.
       const decoded = jwtDecode<UserToken>(newToken);
-      localStorage.setItem('token', newToken);
+      setApiToken(newToken);
       setToken(newToken);
       setUser(decoded);
     } catch (e) {
@@ -45,7 +59,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Si el usuario es expulsado mid-session (por ej. 401), preservamos la ruta actual
     // para que pueda regresar tras loguearse de nuevo.
     sessionStorage.setItem('returnPath', window.location.pathname);
-    localStorage.removeItem('token');
+    
+    // Attempt to notify server to revoke token
+    fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+    
+    setApiToken(null);
     setToken(null);
     setUser(null);
   };
@@ -59,42 +77,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (timeToExpire <= 0) {
         logout();
       } else {
-        const timer = setTimeout(() => {
-          logout();
-        }, timeToExpire);
+        const timer = setTimeout(async () => {
+          try {
+            const response = await fetch(`${API_URL}/refresh`, { method: 'POST', credentials: 'include' });
+            if (response.ok) {
+              const data = await response.json();
+              setApiToken(data.access_token);
+              setToken(data.access_token);
+              setUser(jwtDecode<UserToken>(data.access_token));
+            } else {
+              logout();
+            }
+          } catch (e) {
+            logout();
+          }
+        }, Math.max(0, timeToExpire - 5000)); // Refresh 5 seconds before expiration
         return () => clearTimeout(timer);
       }
     }
   }, [user]);
 
-  // Global fetch interceptor for adding token and handling 401
+  // Listen for global unauthorized events from apiClient
   useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-      let [resource, config] = args;
-      
-      if (typeof resource === 'string' && resource.startsWith(API_URL)) {
-        config = config || {};
-        config.headers = {
-          ...config.headers,
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-      }
-      
-      const response = await originalFetch(resource, config);
-      
-      if (response.status === 401 && resource.toString().startsWith(API_URL) && !resource.toString().includes('/token')) {
-        // Token is invalid/expired
-        logout();
-      }
-      
-      return response;
+    const handleUnauthorized = () => {
+      logout();
     };
-
+    
+    window.addEventListener('auth-unauthorized', handleUnauthorized);
+    
     return () => {
-      window.fetch = originalFetch;
+      window.removeEventListener('auth-unauthorized', handleUnauthorized);
     };
-  }, [token]);
+  }, []);
+
+  if (isInitializing) return null;
 
   return (
     <AuthContext.Provider value={{ token, user, login, logout }}>

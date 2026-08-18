@@ -149,3 +149,16 @@ El flujo End-to-End (E2E) consolidado integra Moodle, Matrix (Synapse/Maubot), y
 4. **Seguridad y Aislamiento en el Dashboard:** 
    `bdc-trazabilidad` requiere inicio de sesión. Utiliza tokens JWT generados contra Moodle para validar la identidad y extrae los `allowed_courses` (cursos donde el profesor tiene docencia) desde `mapeo-api`. El backend (`metrics-api`) restringe de forma estricta (`auth.py`) que el usuario únicamente pueda solicitar y visualizar datos de `metrics.interacciones` para los cursos a los que está autorizado, asegurando un aislamiento total entre profesores y estudiantes.
 
+### Limitaciones Conocidas del Test True-E2E
+Para la validación automatizada de este flujo en entornos de Integración Continua (la suite `True-E2E`), **existe una limitación intencionada en el alcance de la prueba:** el orquestador simula el comportamiento a partir de la llamada `POST /eventos` hacia `mapeo-api`, asumiendo que el Bot ya ha detectado la actividad en Matrix. No se levanta ni se verifica el clúster de Matrix/Synapse/Maubot durante este test específico, ya que hacerlo añadiría un grado de inestabilidad y sobrecarga arquitectónica incompatible con las pruebas automatizadas de CI de la API. El tramo anterior (Matrix -> Maubot) se asume verificado por componentes individuales.
+
+---
+
+## 11. Excepciones de Documentación (Doxygen)
+
+Como regla general del proyecto (desde la Fase 0.1), Doxygen corre en modo estricto (`WARN_AS_ERROR = YES`) para evitar deuda técnica en la documentación.
+
+**Excepción Aprobada (Fase 8):**
+Se ha relajado explícitamente la directiva `WARN_IF_UNDOCUMENTED = NO` en el `Doxyfile` de `bdc-trazabilidad`. Esta excepción técnica se aprueba para evitar la desproporcionada carga de requerir un docstring individual para *cada campo y variable interna* de los modelos de validación Pydantic en `metrics-api/schemas.py`. 
+- Esta regla aplica únicamente a la exigencia de documentación miembro-por-miembro. 
+- La directiva `WARN_AS_ERROR = YES` se mantiene activa para capturar errores de sintaxis, conflictos de parsing y enlaces rotos.

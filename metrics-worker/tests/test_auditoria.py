@@ -24,8 +24,9 @@ async def test_eventos_recientes_contract():
         mock_get.return_value = mock_resp
         
         await worker._consume_feed()
-        mock_get.assert_called_once()
-        assert "eventos-recientes" in mock_get.call_args[0][0]
+        assert mock_get.call_count == 2
+        assert "eventos-recientes" in mock_get.call_args_list[0][0][0]
+        assert "mapeos" in mock_get.call_args_list[1][0][0]
 
 @pytest.mark.asyncio
 async def test_discrepancia_forzada(mock_db):
@@ -36,7 +37,7 @@ async def test_discrepancia_forzada(mock_db):
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_resp_mapeos = MagicMock()
         mock_resp_mapeos.status_code = 200
-        mock_resp_mapeos.json.return_value = [{"github_fork_url": "https://github.com/test/repo.git", "moodle_user_id": 1, "moodle_course_id": 1}]
+        mock_resp_mapeos.json.return_value = [{"repo_url": "https://github.com/test/repo.git", "estado": "ACTIVO", "moodle_user_id": 1, "moodle_course_id": 1}]
         
         mock_db.query.return_value.filter.return_value.first.return_value = None
         
@@ -60,7 +61,7 @@ async def test_filtro_contrato_okf(mock_db):
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_resp_mapeos = MagicMock()
         mock_resp_mapeos.status_code = 200
-        mock_resp_mapeos.json.return_value = [{"github_fork_url": "https://github.com/test/repo.git", "moodle_user_id": 1, "moodle_course_id": 1}]
+        mock_resp_mapeos.json.return_value = [{"repo_url": "https://github.com/test/repo.git", "estado": "ACTIVO", "moodle_user_id": 1, "moodle_course_id": 1}]
         
         mock_db.query.return_value.filter.return_value.first.return_value = None
         
@@ -113,30 +114,31 @@ async def test_rate_limit_backoff():
 @pytest.mark.asyncio
 async def test_backfill_idempotencia():
     """5. Prueba del backfill para comprobar que no duplica inserciones si se corre dos veces."""
-    from scripts.backfill_github import backfill
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        # Primera llamada devuelve 200, segunda llamada devuelve 409 (ya existe)
-        mock_resp_200 = MagicMock()
-        mock_resp_200.status_code = 200
-        mock_resp_409 = MagicMock()
-        mock_resp_409.status_code = 409
-        mock_post.side_effect = [mock_resp_200, mock_resp_409]
-        
-        with patch("glob.glob", return_value=["/tmp/llm_wiki_repos/123/.backfill.jsonl"]):
-            with patch("builtins.open", new_callable=MagicMock) as mock_open:
-                mock_file = mock_open.return_value.__enter__.return_value
-                payload = '{"commit_sha": "abc1234", "matrix_room_id": "!room:matrix.org"}'
-                
-                # Ejecución 1
-                mock_file.__iter__.return_value = iter([payload])
-                await backfill()
-                assert mock_post.call_count == 1
-                
-                # Ejecución 2
-                mock_file.__iter__.return_value = iter([payload])
-                await backfill()
-                assert mock_post.call_count == 2
-                # Si llega hasta aquí sin excepciones, manejó el 409 correctamente como idempotente.
+    with patch.dict("os.environ", {"MAPEO_API_TOKEN": "test_token"}):
+        from metrics_worker.backfill import backfill
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            # Primera llamada devuelve 200, segunda llamada devuelve 409 (ya existe)
+            mock_resp_200 = MagicMock()
+            mock_resp_200.status_code = 200
+            mock_resp_409 = MagicMock()
+            mock_resp_409.status_code = 409
+            mock_post.side_effect = [mock_resp_200, mock_resp_409]
+            
+            with patch("glob.glob", return_value=["/tmp/llm_wiki_repos/123/.backfill.jsonl"]):
+                with patch("builtins.open", new_callable=MagicMock) as mock_open:
+                    mock_file = mock_open.return_value.__enter__.return_value
+                    payload = '{"commit_sha": "abc1234", "matrix_room_id": "!room:matrix.org"}'
+                    
+                    # Ejecución 1
+                    mock_file.__iter__.return_value = iter([payload])
+                    await backfill()
+                    assert mock_post.call_count == 1
+                    
+                    # Ejecución 2
+                    mock_file.__iter__.return_value = iter([payload])
+                    await backfill()
+                    assert mock_post.call_count == 2
+                    # Si llega hasta aquí sin excepciones, manejó el 409 correctamente como idempotente.
 
 @pytest.mark.asyncio
 async def test_migracion_alembic():

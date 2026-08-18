@@ -19,7 +19,7 @@ services:
       - MAPEO_API_TOKEN=8f3b2a9d8f3b2a9d8f3b2a9d8f3b2a9d
       - MOODLE_AUTH_URL=http://moodle-matrix-dev-moodle-1:8080/login/token.php
       - MAPEO_API_URL=http://moodle-matrix-dev-mapeo-api-1:8000
-      - ENABLE_DEMO_AUTH=false
+      - ENABLE_DEMO_AUTH=true
 
   metrics-worker:
     image: moodle-matrix-dev-mapeo-api

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../lib/api';
+import { apiClient } from '../lib/apiClient';
 import type { AuthResponse } from '../lib/api';
 import { LogIn } from 'lucide-react';
 
@@ -19,9 +19,11 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/token`, {
+      const response = await apiClient('/v1/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ username, password })
       });
 
