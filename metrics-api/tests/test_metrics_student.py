@@ -15,7 +15,7 @@ headers = {"Authorization": f"Bearer {token}"}
 
 def test_student_zero_data(client):
     """Test explícito de cero datos, como pidió el usuario."""
-    response = client.get("/metrics/course/999/student/999", headers=headers)
+    response = client.get("/v1/metrics/cursos/999/estudiantes/999", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["student_id"] == 999
@@ -33,7 +33,7 @@ def test_student_exists_but_not_in_course(client, db_session):
     db_session.commit()
 
     # Consultamos al alumno 1 pero en curso 2
-    response = client.get("/metrics/course/2/student/1", headers=headers)
+    response = client.get("/v1/metrics/cursos/2/estudiantes/1", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["student_id"] == 1
@@ -47,14 +47,14 @@ def test_student_with_data(client, db_session):
     db_session.add(Interaccion(moodle_user_id=1, moodle_course_id=1, tipo_interaccion="chat", timestamp=datetime.utcnow()))
     db_session.commit()
 
-    response = client.get("/metrics/course/1/student/1", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/estudiantes/1", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total_interactions"] == 2
     assert data["interactions_by_type"] == {"chat": 2}
 
 def test_student_interactions_pagination_zero_data(client):
-    response = client.get("/metrics/course/2/student/1/interactions", headers=headers)
+    response = client.get("/v1/metrics/cursos/2/estudiantes/1/interacciones", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 0
@@ -62,15 +62,15 @@ def test_student_interactions_pagination_zero_data(client):
 
 def test_student_interactions_pagination_limits(client):
     # Invalid limit < 1
-    response = client.get("/metrics/course/1/student/1/interactions?limit=0", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones?limit=0", headers=headers)
     assert response.status_code == 422
     
     # Invalid limit > 100
-    response = client.get("/metrics/course/1/student/1/interactions?limit=101", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones?limit=101", headers=headers)
     assert response.status_code == 422
 
     # Invalid offset < 0
-    response = client.get("/metrics/course/1/student/1/interactions?offset=-1", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones?offset=-1", headers=headers)
     assert response.status_code == 422
 
 def test_student_interactions_with_data(client, db_session):
@@ -79,7 +79,7 @@ def test_student_interactions_with_data(client, db_session):
     db_session.add(Interaccion(moodle_user_id=1, moodle_course_id=1, tipo_interaccion="wiki", timestamp=datetime.utcnow()))
     db_session.commit()
 
-    response = client.get("/metrics/course/1/student/1/interactions", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2

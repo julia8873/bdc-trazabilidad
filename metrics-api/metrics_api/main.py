@@ -18,7 +18,10 @@ from metrics_api.schemas import (
     StudentMetricsResponse,
     PaginatedInteractions,
     CourseStudentsResponse,
-    StudentCourseItem
+    StudentCourseItem,
+    AgentSummaryResponse,
+    AgentFollowUpRequest,
+    AgentFollowUpResponse
 )
 from metrics_api.repository import (
     get_course_aggregates,
@@ -51,14 +54,27 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("FATAL: JWT_SECRET_KEY no está configurado de manera segura.")
     yield
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request
+
+class SunsetMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        route = request.scope.get("route")
+        if route and getattr(route, "deprecated", False):
+            response.headers["Sunset"] = "Wed, 01 Jan 2027 00:00:00 GMT"
+        return response
+
 app = FastAPI(
     title="Metrics API",
     description="API para exponer métricas agregadas de interacciones (Fase 4)",
     lifespan=lifespan,
-    docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs",
-    redoc_url=None if os.getenv("ENVIRONMENT") == "production" else "/redoc",
-    openapi_url=None if os.getenv("ENVIRONMENT") == "production" else "/openapi.json"
+    root_path="/api",
+    docs_url="/docs" if os.getenv("ENVIRONMENT") in ["dev", "local"] else None,
+    redoc_url="/redoc" if os.getenv("ENVIRONMENT") in ["dev", "local"] else None,
+    openapi_url="/openapi.json" if os.getenv("ENVIRONMENT") in ["dev", "local"] else None
 )
+app.add_middleware(SunsetMiddleware)
 
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -102,41 +118,34 @@ def health_check(response: Response, request: Request, session: Session = Depend
     version = get_schema_version(session)
     return {"status": "ok", "schema_version": version}
 
-@app.get("/v1/metrics/course/{course_id}", response_model=CourseMetricsResponse)
-@app.get("/metrics/course/{course_id}", response_model=CourseMetricsResponse, deprecated=True)
+@app.get("/v1/metrics/cursos/{curso_id}", response_model=CourseMetricsResponse)
 def get_course_metrics(response: Response, request: Request, 
-    course_id: int,
+    curso_id: int,
     session: Session = Depends(get_session),
     user: AuthenticatedUser = Depends(verificar_permisos)
 ):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
 
     if not user.is_teacher:
         raise HTTPException(status_code=403, detail="Solo profesores pueden ver métricas del curso completo")
-    total, by_type, percentiles = get_course_aggregates(session, course_id)
+    total, by_type, percentiles = get_course_aggregates(session, curso_id)
     return CourseMetricsResponse(
-        course_id=course_id,
+        course_id=curso_id,
         total_interactions=total,
         interactions_by_type=by_type,
         percentiles=percentiles
     )
 
-@app.get("/v1/metrics/course/{course_id}/interactions", response_model=PaginatedInteractions)
-@app.get("/metrics/course/{course_id}/interactions", response_model=PaginatedInteractions, deprecated=True)
+@app.get("/v1/metrics/cursos/{curso_id}/interacciones", response_model=PaginatedInteractions)
 def get_course_interactions(response: Response, request: Request, 
-    course_id: int,
+    curso_id: int,
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
     user: AuthenticatedUser = Depends(verificar_permisos)
 ):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
-
     if not user.is_teacher:
-        raise HTTPException(status_code=403, detail="Solo profesores pueden ver métricas del curso completo")
-    items, total = get_interacciones_by_curso(session, course_id, limit=limit, offset=offset)
+        raise HTTPException(status_code=403, detail="Solo profesores pueden ver interacciones del curso")
+    items, total = get_interacciones_by_curso(session, curso_id, limit=limit, offset=offset)
     return PaginatedInteractions(
         items=items,
         total=total,
@@ -145,7 +154,6 @@ def get_course_interactions(response: Response, request: Request,
     )
 
 @app.get("/v1/metrics/cursos/{curso_id}/estudiantes", response_model=CourseStudentsResponse)
-@app.get("/metrics/cursos/{curso_id}/estudiantes", response_model=CourseStudentsResponse, deprecated=True)
 def get_course_students(response: Response, request: Request, 
     curso_id: int,
     session: Session = Depends(get_session),
@@ -222,46 +230,38 @@ def get_course_students(response: Response, request: Request,
         students=students_list
     )
 
-@app.get("/v1/metrics/course/{course_id}/student/{student_id}", response_model=StudentMetricsResponse)
-@app.get("/metrics/course/{course_id}/student/{student_id}", response_model=StudentMetricsResponse, deprecated=True)
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}", response_model=StudentMetricsResponse)
 def get_student_metrics(response: Response, request: Request, 
-    course_id: int,
-    student_id: int,
+    curso_id: int, estudiante_id: int,
     session: Session = Depends(get_session),
     user: AuthenticatedUser = Depends(verificar_permisos)
 ):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
 
-    if not user.is_teacher and user.moodle_user_id != student_id:
+    if not user.is_teacher and user.moodle_user_id != estudiante_id:
         raise HTTPException(status_code=403, detail="No puedes ver las métricas de otro alumno")
     # Verificamos si el alumno tiene actividad en general para retornar 404 o 200 con total=0
     # Como la regla dice "200 con total_interactions: 0 no 404", lo retornamos directamente.
-    total, by_type = get_student_aggregates(session, student_id, course_id)
+    total, by_type = get_student_aggregates(session, estudiante_id, curso_id)
     
     return StudentMetricsResponse(
-        student_id=student_id,
-        course_id=course_id,
+        student_id=estudiante_id,
+        course_id=curso_id,
         total_interactions=total,
         interactions_by_type=by_type
     )
 
-@app.get("/v1/metrics/course/{course_id}/student/{student_id}/interactions", response_model=PaginatedInteractions)
-@app.get("/metrics/course/{course_id}/student/{student_id}/interactions", response_model=PaginatedInteractions, deprecated=True)
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}/interacciones", response_model=PaginatedInteractions)
 def get_student_interactions(response: Response, request: Request, 
-    course_id: int,
-    student_id: int,
+    curso_id: int, estudiante_id: int,
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
     user: AuthenticatedUser = Depends(verificar_permisos)
 ):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
 
-    if not user.is_teacher and user.moodle_user_id != student_id:
+    if not user.is_teacher and user.moodle_user_id != estudiante_id:
         raise HTTPException(status_code=403, detail="No puedes ver las métricas de otro alumno")
-    items, total = get_interacciones_by_alumno(session, student_id, course_id, limit=limit, offset=offset)
+    items, total = get_interacciones_by_alumno(session, estudiante_id, curso_id, limit=limit, offset=offset)
     return PaginatedInteractions(
         items=items,
         total=total,
@@ -271,9 +271,7 @@ def get_student_interactions(response: Response, request: Request,
 
 @app.post("/v1/token")
 @app.post("/token", deprecated=True)
-def login(request: Request, request: LoginRequest, response: Response, session: Session = Depends(get_session)):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
+def login(request: LoginRequest, response: Response, session: Session = Depends(get_session)):
 
     moodle_url = os.getenv("MOODLE_AUTH_URL")
     mapeo_url = os.getenv("MAPEO_API_URL")
@@ -354,14 +352,14 @@ def login(request: Request, request: LoginRequest, response: Response, session: 
 
     # Inyectar mapeos mock si la base de datos está vacía (para pruebas UI)
     if not allowed_courses:
-        if request.username == "admin":
-            allowed_courses = [1]
+        if request.username in ("admin", "profesor1"):
+            allowed_courses = [1, 3]
             is_teacher = True
-            moodle_user_id = 1
-        elif request.username == "alumno":
-            allowed_courses = [1]
+            moodle_user_id = 1 if request.username == "admin" else 99
+        elif request.username in ("alumno", "alumno1"):
+            allowed_courses = [1, 3]
             is_teacher = False
-            moodle_user_id = 2
+            moodle_user_id = 2 if request.username == "alumno" else 100
 
     auditoria = AuditoriaAcceso(
         moodle_username=request.username,
@@ -409,8 +407,6 @@ def login(request: Request, request: LoginRequest, response: Response, session: 
 @app.post("/v1/refresh")
 @app.post("/refresh", deprecated=True)
 def refresh(request: Request, response: Response, session: Session = Depends(get_session)):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
 
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -498,8 +494,6 @@ def refresh(request: Request, response: Response, session: Session = Depends(get
 @app.post("/v1/logout")
 @app.post("/logout", deprecated=True)
 def logout(request: Request, response: Response, session: Session = Depends(get_session)):
-    if not request.url.path.startswith("/v1/"):
-        response.headers["Sunset"] = "Wed, 18 Feb 2027 00:00:00 GMT"
 
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
@@ -510,3 +504,19 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
         
     response.delete_cookie("refresh_token")
     return {"status": "ok"}
+
+from metrics_api.agent import generar_resumen, seguimiento_resumen
+
+@app.get("/v1/capacidades")
+def get_capacidades():
+    return {"ENABLE_EVALUATION_AGENT": os.getenv("ENABLE_EVALUATION_AGENT", "false").lower() == "true"}
+
+@app.post("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/resumen", response_model=AgentSummaryResponse)
+async def api_generar_resumen(curso_id: int, alumno_id: int, user: AuthenticatedUser = Depends(verify_token)):
+    verificar_permisos(curso_id, user)
+    return await generar_resumen(curso_id, alumno_id)
+
+@app.post("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/resumen/seguimiento", response_model=AgentFollowUpResponse)
+async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
+    verificar_permisos(curso_id, user)
+    return await seguimiento_resumen(curso_id, alumno_id, req)

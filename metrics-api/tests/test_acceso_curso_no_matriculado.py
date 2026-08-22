@@ -12,6 +12,6 @@ def test_course_not_enrolled(client, db_session):
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     
     headers = {"Authorization": f"Bearer {token}"}
-    response = client.get("/metrics/course/6/student/10", headers=headers)
+    response = client.get("/v1/metrics/cursos/6/estudiantes/10", headers=headers)
     assert response.status_code == 403
     assert "Acceso denegado a este curso" in response.json()["detail"]

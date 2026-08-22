@@ -32,8 +32,8 @@ export const CourseDashboard: React.FC = () => {
       try {
         setLoading(true);
         const [mRes, iRes, sRes] = await Promise.all([
-          apiClient(`/v1/metrics/course/${courseId}`),
-          apiClient(`/v1/metrics/course/${courseId}/interactions?limit=5`),
+          apiClient(`/v1/metrics/cursos/${courseId}`),
+          apiClient(`/v1/metrics/cursos/${courseId}/interacciones?limit=5`),
           apiClient(`/v1/metrics/cursos/${courseId}/estudiantes`)
         ]);
 

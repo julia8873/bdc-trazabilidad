@@ -56,7 +56,7 @@ async def backfill():
                         }
                         
                         resp = await client.post(
-                            f"{MAPEO_API_URL}/eventos",
+                            f"{MAPEO_API_URL}/v1/eventos",
                             json=evento_payload,
                             headers=headers,
                             timeout=5

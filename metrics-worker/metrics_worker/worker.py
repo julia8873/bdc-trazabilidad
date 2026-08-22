@@ -15,17 +15,39 @@ from shared_pkg.okf_contract import COMMIT_MSG_INGEST, COMMIT_MSG_REVERT, COMMIT
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("metrics_worker")
 
-# Cargar configuracion
-config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
-try:
-    with open(config_path, "r") as f:
-        config_yaml = yaml.safe_load(f)
-        POLL_INTERVAL_SEC = config_yaml.get("worker", {}).get("intervals", {}).get("poll_sec", 15)
-        RECONCILIATION_INTERVAL_SEC = config_yaml.get("worker", {}).get("intervals", {}).get("reconciliation_sec", 86400)
-except Exception as e:
-    logger.warning(f"No se pudo leer config.yaml, usando defaults: {e}")
-    POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "15"))
-    RECONCILIATION_INTERVAL_SEC = int(os.getenv("RECONCILIATION_INTERVAL_SEC", "86400"))
+# Cargar configuracion: primero busca en config/config.yaml compartido (Fase 9),
+# con fallback al config.yaml local del worker y a variables de entorno.
+def _load_config():
+    # Ruta compartida: bdc-trazabilidad/config/config.yaml
+    shared_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "config.yaml")
+    # Ruta local del worker
+    local_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+    for path in (shared_path, local_path):
+        try:
+            with open(path, "r") as f:
+                data = yaml.safe_load(f)
+                if data:
+                    return data
+        except Exception:
+            continue
+    return {}
+
+_config_yaml = _load_config()
+_timings = _config_yaml.get("timings", {})
+# Compatibilidad con la clave legacy del worker local
+_worker_intervals = _config_yaml.get("worker", {}).get("intervals", {})
+
+POLL_INTERVAL_SEC = (
+    _timings.get("poll_interval_sec")
+    or _worker_intervals.get("poll_sec")
+    or int(os.getenv("POLL_INTERVAL_SEC", "15"))
+)
+RECONCILIATION_INTERVAL_SEC = (
+    _timings.get("reconciliation_interval_sec")
+    or _worker_intervals.get("reconciliation_sec")
+    or int(os.getenv("RECONCILIATION_INTERVAL_SEC", "86400"))
+)
+logger.info(f"Timings cargados: poll={POLL_INTERVAL_SEC}s, reconciliation={RECONCILIATION_INTERVAL_SEC}s")
 
 MAPEO_API_URL = os.getenv("MAPEO_API_URL", "http://mapeo-api:8000")
 MAPEO_API_TOKEN = os.getenv("MAPEO_API_TOKEN", "")
@@ -63,11 +85,11 @@ class SyncEventWorker:
         headers = {"Authorization": f"Bearer {MAPEO_API_TOKEN}"}
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{MAPEO_API_URL}/eventos-recientes", headers=headers, timeout=10)
+                resp = await client.get(f"{MAPEO_API_URL}/v1/eventos-recientes", headers=headers, timeout=10)
                 resp.raise_for_status()
                 events = resp.json()
                 
-                resp2 = await client.get(f"{MAPEO_API_URL}/mapeos", headers=headers, timeout=10)
+                resp2 = await client.get(f"{MAPEO_API_URL}/v1/mapeos", headers=headers, timeout=10)
                 resp2.raise_for_status()
                 mapeos = resp2.json()
                 mapeo_dict = {m.get("matrix_room_id"): m for m in mapeos if m.get("matrix_room_id")}
@@ -196,7 +218,7 @@ class SyncEventWorker:
         headers = {"Authorization": f"Bearer {MAPEO_API_TOKEN}"}
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{MAPEO_API_URL}/mapeos", headers=headers, timeout=10)
+                resp = await client.get(f"{MAPEO_API_URL}/v1/mapeos", headers=headers, timeout=10)
                 resp.raise_for_status()
                 mapeos = resp.json()
         except Exception as e:

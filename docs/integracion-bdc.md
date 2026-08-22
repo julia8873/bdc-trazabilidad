@@ -162,3 +162,60 @@ Como regla general del proyecto (desde la Fase 0.1), Doxygen corre en modo estri
 Se ha relajado explícitamente la directiva `WARN_IF_UNDOCUMENTED = NO` en el `Doxyfile` de `bdc-trazabilidad`. Esta excepción técnica se aprueba para evitar la desproporcionada carga de requerir un docstring individual para *cada campo y variable interna* de los modelos de validación Pydantic en `metrics-api/schemas.py`. 
 - Esta regla aplica únicamente a la exigencia de documentación miembro-por-miembro. 
 - La directiva `WARN_AS_ERROR = YES` se mantiene activa para capturar errores de sintaxis, conflictos de parsing y enlaces rotos.
+
+---
+
+## 12. Versionado de API (Fase 9)
+
+**Estado: Completada**
+
+### 12.1 Rutas `/v1/` y Rutas Deprecadas
+
+A partir de la Fase 9, todas las rutas públicas de `mapeo-api` y `metrics-api` están bajo el prefijo `/v1/`.  
+Las rutas sin prefijo se mantienen como **alias deprecados** durante 6 meses, devolviendo la cabecera `Sunset: Wed, 18 Feb 2027 00:00:00 GMT`.
+
+### 12.2 Consumidores del Versionado: Tabla de Dependencias Cruzadas
+
+| Consumidor | Endpoint afectado | URL actualizada | Notas |
+|---|---|---|---|
+| `metrics-worker` (bdc-trazabilidad) | `GET /eventos-recientes`, `GET /mapeos` | `/v1/eventos-recientes`, `/v1/mapeos` | Lee `data[]` del response paginado |
+| `metrics-api` (bdc-trazabilidad) | `GET /mapeos` | `/v1/mapeos` | Extrae `data[]` de `PaginatedMapeos` |
+| `llm-wiki-assistant` (`MapeoClient`) | `POST /eventos`, `GET /mapeos/by-room/{id}` | `/v1/eventos`, `/v1/mapeos/by-room/{id}` | Actualizado en `mixins/mapeo_client.py` |
+| Frontend (`bdc-trazabilidad`) | `POST /token`, `GET /metrics/*` | `/v1/token`, `/v1/metrics/*` | Las rutas `/v1/` ya estaban activas |
+
+### 12.3 Convención de Nomenclatura de Autenticación
+
+Las rutas de autenticación `/token`, `/refresh` y `/logout` se mantienen **en inglés** de forma explícita y deliberada. Esta es una excepción aprobada a la regla general de españolización del proyecto, justificada por:
+
+1. Son términos estandarizados por **OAuth 2.0 / RFC 6749** (`/token`) y ampliamente adoptados como convención de la industria.
+2. Cambiar estos nombres a equivalentes en español rompería la compatibilidad con clientes OAuth estándar y generaría confusión para cualquier integrador externo.
+3. Coherente con el patrón ya documentado en la Fase 7.1 para el login de demo.
+
+**Esta excepción no se aplica** al resto de endpoints del sistema, que siguen la regla de españolización (`/mapeos`, `/eventos`, `/cursos`, `/estudiantes`, etc.).
+
+### 12.4 Paginación por Cursor en `GET /v1/mapeos`
+
+El endpoint `GET /v1/mapeos` implementa paginación por cursor basada en `id`:
+
+- **Parámetros**: `after` (cursor, último `id` recibido) y `limit` (por defecto 50, máx. 200).
+- **Respuesta**: `PaginatedMapeos { data: [...], next_cursor: int|null, has_more: bool }`.
+- El endpoint deprecado `GET /mapeos` sigue devolviendo `List[MapeoRead]` sin paginar.
+
+### 12.5 Formato de Error Consistente (RFC 7807)
+
+Ambas APIs (`mapeo-api` y `metrics-api`) retornan Problem Details para todos los errores:
+
+```json
+{
+    "type": "about:blank",
+    "title": "HTTP Error",
+    "status": 404,
+    "detail": "Mapeo no encontrado",
+    "instance": "/v1/mapeos"
+}
+```
+
+### 12.6 OpenAPI en Producción
+
+La documentación interactiva (`/docs`, `/redoc`, `/openapi.json`) se desactiva cuando `ENVIRONMENT=production`. Esta variable es **independiente** de `MOCK_SERVICES` — `MOCK_SERVICES=false` no implica entorno de producción (los tests True-E2E corren con `MOCK_SERVICES=false` en CI).
+

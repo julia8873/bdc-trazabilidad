@@ -60,9 +60,9 @@ async def main():
         user, repo = match.groups()
         repo_url = f"https://{GITHUB_PAT}@github.com/{user}/{repo}.git"
     else:
-        # Fallback si el regex no machea
-        repo_url = f"https://{GITHUB_PAT}@github.com/julia8873/e2e-test-repo.git"
+        repo_url = e2e_fork_url
     
+    subprocess.run("git config --global --add safe.directory '*'", shell=True, check=True)
     subprocess.run(f"git clone {repo_url} /tmp/e2e-test-repo", shell=True, check=True)
     subprocess.run("git config user.name 'E2E Bot' && git config user.email 'e2e@example.com'", shell=True, cwd="/tmp/e2e-test-repo", check=True)
     

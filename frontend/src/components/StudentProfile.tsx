@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 
 export const StudentProfile: React.FC = () => {
   const { courseId, studentId } = useParams();
-  
+
   const [metrics, setMetrics] = useState<StudentMetrics | null>(null);
   const [interactions, setInteractions] = useState<PaginatedInteractions | null>(null);
   const [error, setError] = useState<string>('');
@@ -26,8 +26,8 @@ export const StudentProfile: React.FC = () => {
       try {
         setLoading(true);
         const [mRes, iRes] = await Promise.all([
-          apiClient(`/v1/metrics/course/${courseId}/student/${studentId}`),
-          apiClient(`/v1/metrics/course/${courseId}/student/${studentId}/interactions?limit=10`)
+          apiClient(`/v1/metrics/cursos/${courseId}/estudiantes/${studentId}`),
+          apiClient(`/v1/metrics/cursos/${courseId}/estudiantes/${studentId}/interacciones?limit=10`)
         ]);
 
         if (mRes.status === 403) throw new Error('Acceso denegado a métricas del alumno');
@@ -36,7 +36,7 @@ export const StudentProfile: React.FC = () => {
 
         const mData = await mRes.json();
         const iData = await iRes.json();
-        
+
         setMetrics(mData);
         setInteractions(iData);
       } catch (err: any) {
@@ -45,7 +45,7 @@ export const StudentProfile: React.FC = () => {
         setLoading(false);
       }
     };
-    
+
     if (courseId && studentId) fetchStudentData();
   }, [courseId, studentId]);
 
@@ -71,7 +71,7 @@ export const StudentProfile: React.FC = () => {
             <p style={{ color: 'var(--text-muted)' }}>Total Interacciones</p>
             <h2>{metrics.total_interactions}</h2>
           </div>
-          
+
           <div className="mt-4" style={{ height: '200px' }}>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">

@@ -7,13 +7,14 @@ import jwt
 from metrics_api.auth import JWT_SECRET_KEY, JWT_ALGORITHM
 
 def test_auth_no_token(client):
-    response = client.get("/metrics/course/1")
+    response = client.get("/v1/metrics/cursos/1")
     assert response.status_code in (401, 403)
+    assert response.json()["detail"] == "Not authenticated"
 
 def test_auth_invalid_token(client):
-    response = client.get("/metrics/course/1", headers={"Authorization": "Bearer wrong.token.here"})
+    response = client.get("/v1/metrics/cursos/1", headers={"Authorization": "Bearer wrong.token.here"})
     assert response.status_code == 401
-    assert response.json() == {"detail": "Token inválido"}
+    assert response.json()["detail"] == "Token inválido"
 
 def test_auth_valid_token(client):
     payload = {
@@ -23,7 +24,7 @@ def test_auth_valid_token(client):
         "allowed_courses": [1, 2, 999]
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    response = client.get("/metrics/course/1", headers={"Authorization": f"Bearer {token}"})
+    response = client.get("/v1/metrics/cursos/1", headers={"Authorization": f"Bearer {token}"})
     print("STATUS:", response.status_code)
     print("JSON:", response.json())
     # 200 is expected because token is valid (assuming course 1 returns empty metrics)

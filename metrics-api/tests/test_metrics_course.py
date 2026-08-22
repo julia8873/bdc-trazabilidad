@@ -18,7 +18,7 @@ headers = {"Authorization": f"Bearer {token}"}
 
 def test_course_zero_data(client):
     """Test explícito de cero datos, como pidió el usuario."""
-    response = client.get("/metrics/course/999", headers=headers)
+    response = client.get("/v1/metrics/cursos/999", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["course_id"] == 999
@@ -46,7 +46,7 @@ def test_course_with_data(client, db_session):
         db_session.add(interaccion)
     db_session.commit()
 
-    response = client.get("/metrics/course/1", headers=headers)
+    response = client.get("/v1/metrics/cursos/1", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total_interactions"] == 8
@@ -58,7 +58,7 @@ def test_course_with_data(client, db_session):
     assert data["percentiles"]["p90"] == 4.8
 
 def test_course_interactions_pagination_zero_data(client):
-    response = client.get("/metrics/course/999/interactions", headers=headers)
+    response = client.get("/v1/metrics/cursos/999/interacciones", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 0
@@ -68,15 +68,15 @@ def test_course_interactions_pagination_zero_data(client):
 
 def test_course_interactions_pagination_limits(client):
     # Invalid limit < 1
-    response = client.get("/metrics/course/1/interactions?limit=0", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/interacciones?limit=0", headers=headers)
     assert response.status_code == 422
     
     # Invalid limit > 100
-    response = client.get("/metrics/course/1/interactions?limit=101", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/interacciones?limit=101", headers=headers)
     assert response.status_code == 422
 
     # Invalid offset < 0
-    response = client.get("/metrics/course/1/interactions?offset=-1", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/interacciones?offset=-1", headers=headers)
     assert response.status_code == 422
 
 def test_course_interactions_with_data(client, db_session):
@@ -88,7 +88,7 @@ def test_course_interactions_with_data(client, db_session):
         db_session.add(interaccion)
     db_session.commit()
 
-    response = client.get("/metrics/course/1/interactions", headers=headers)
+    response = client.get("/v1/metrics/cursos/1/interacciones", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 5

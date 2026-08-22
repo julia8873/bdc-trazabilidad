@@ -1,4 +1,3 @@
-version: '3.8'
 
 networks:
   bdc-net:
@@ -20,6 +19,9 @@ services:
       - MOODLE_AUTH_URL=http://moodle-matrix-dev-moodle-1:8080/login/token.php
       - MAPEO_API_URL=http://moodle-matrix-dev-mapeo-api-1:8000
       - ENABLE_DEMO_AUTH=true
+      - ENVIRONMENT=dev
+    env_file:
+      - .env
 
   metrics-worker:
     image: moodle-matrix-dev-mapeo-api
@@ -45,6 +47,6 @@ services:
       - ./frontend:/app
     working_dir: /app
     ports:
-      - "3000:3000"
+      - "3001:3000"
     networks:
       - bdc-net

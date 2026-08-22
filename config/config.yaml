@@ -1,0 +1,18 @@
+# ==============================================================================
+# CONFIG CENTRAL BDC-TRAZABILIDAD (bdc-trazabilidad/config/config.yaml)
+# Valores consolidados de tiempos y duración compartidos por todos los servicios.
+# ==============================================================================
+
+timings:
+  # Worker: intervalo de poll al feed de mapeo-api (Bucle 1)
+  poll_interval_sec: 15
+  # Worker: intervalo de auditoría completa de GitHub (Bucle 2)
+  reconciliation_interval_sec: 86400
+  # metrics-api: duración del access token JWT
+  access_token_expire_minutes: 15
+  # metrics-api: duración del refresh token
+  refresh_token_expire_days: 7
+  # Reservados para Fase 10
+  agent_summary_cache_ttl_min: 60
+  fork_retention_days_after_course_close: 30
+  fallback_retention_days_if_no_close_date: 180

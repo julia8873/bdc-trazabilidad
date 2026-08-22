@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Autenticación y Dashboard', () => {
   
   test('Flujo de login fallido', async ({ page }) => {
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       await route.fulfill({ status: 401, json: { detail: "Invalid credentials" } });
     });
 
@@ -26,13 +26,13 @@ test.describe('Autenticación y Dashboard', () => {
     // o depender del Moodle real de desarrollo. Como es un test E2E contra el docker-compose local, usaremos "admin"/"admin" si existe.
     // Para mayor resiliencia en un E2E frontend, mockeamos la API directamente aquí.
     
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       // Mock login token
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsIm1vb2RsZV91c2VyX2lkIjoxLCJpc190ZWFjaGVyIjp0cnVlLCJhbGxvd2VkX2NvdXJzZXMiOlsxXSwiZXhwIjo5OTk5OTk5OTk5fQ.invalid_sig_but_ok_for_mock";
       await route.fulfill({ json: { access_token: token, token_type: "bearer" } });
     });
 
-    await page.route('**/api/metrics/course/1', async route => {
+    await page.route('**/api/v1/metrics/cursos/1', async route => {
       await route.fulfill({
         json: {
           course_id: 1,
@@ -43,19 +43,19 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
-    await page.route('**/api/metrics/course/1/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/interacciones*', async route => {
       await route.fulfill({
         json: { items: [], total: 0, limit: 10, offset: 0 }
       });
     });
 
-    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes', async route => {
       await route.fulfill({
         json: []
       });
     });
 
-    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes', async route => {
       await route.fulfill({
         json: []
       });
@@ -78,12 +78,12 @@ test.describe('Autenticación y Dashboard', () => {
   });
 
   test('Comprobación de estado vacío para curso sin interacciones', async ({ page }) => {
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsIm1vb2RsZV91c2VyX2lkIjoxLCJpc190ZWFjaGVyIjp0cnVlLCJhbGxvd2VkX2NvdXJzZXMiOlsyXSwiZXhwIjo5OTk5OTk5OTk5fQ.invalid";
       await route.fulfill({ json: { access_token: token, token_type: "bearer" } });
     });
 
-    await page.route('**/api/metrics/course/2', async route => {
+    await page.route('**/api/v1/metrics/cursos/2', async route => {
       await route.fulfill({
         json: {
           course_id: 2,
@@ -94,13 +94,13 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
-    await page.route('**/api/metrics/course/2/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/2/interacciones*', async route => {
       await route.fulfill({
         json: { items: [], total: 0, limit: 10, offset: 0 }
       });
     });
 
-    await page.route('**/api/metrics/cursos/2/estudiantes', async route => {
+    await page.route('**/api/v1/metrics/cursos/2/estudiantes', async route => {
       await route.fulfill({
         json: []
       });
@@ -120,13 +120,13 @@ test.describe('Autenticación y Dashboard', () => {
   });
 
   test('Comprobación de que un alumno no ve el link de Dashboard', async ({ page }) => {
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       // is_teacher: false
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbHVtbm8iLCJtb29kbGVfdXNlcl9pZCI6MiwiaXNfdGVhY2hlciI6ZmFsc2UsImFsbG93ZWRfY291cnNlcyI6WzFdLCJleHAiOjk5OTk5OTk5OTl9.invalid";
       await route.fulfill({ json: { access_token: token, token_type: "bearer" } });
     });
 
-    await page.route('**/api/metrics/course/1/student/2', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes/2', async route => {
       await route.fulfill({
         json: {
           student_id: 2,
@@ -137,7 +137,7 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
-    await page.route('**/api/metrics/course/1/student/2/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes/2/interacciones*', async route => {
       await route.fulfill({
         json: { items: [], total: 0, limit: 10, offset: 0 }
       });
@@ -157,12 +157,12 @@ test.describe('Autenticación y Dashboard', () => {
   });
 
   test('Comprobación del estado vacío de conceptos para un alumno', async ({ page }) => {
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbHVtbm8iLCJtb29kbGVfdXNlcl9pZCI6MiwiaXNfdGVhY2hlciI6ZmFsc2UsImFsbG93ZWRfY291cnNlcyI6WzFdLCJleHAiOjk5OTk5OTk5OTl9.invalid";
       await route.fulfill({ json: { access_token: token, token_type: "bearer" } });
     });
 
-    await page.route('**/api/metrics/course/1/student/2', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes/2', async route => {
       await route.fulfill({
         json: {
           student_id: 2,
@@ -173,7 +173,7 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
-    await page.route('**/api/metrics/course/1/student/2/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes/2/interacciones*', async route => {
       await route.fulfill({
         json: { items: [], total: 0, limit: 10, offset: 0 }
       });
@@ -190,12 +190,12 @@ test.describe('Autenticación y Dashboard', () => {
   });
 
   test('Flujo de sesión expirada a mitad de navegación (401 interceptor)', async ({ page }) => {
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsIm1vb2RsZV91c2VyX2lkIjoxLCJpc190ZWFjaGVyIjp0cnVlLCJhbGxvd2VkX2NvdXJzZXMiOlsxXSwiZXhwIjo5OTk5OTk5OTk5fQ.invalid";
       await route.fulfill({ json: { access_token: token, token_type: "bearer" } });
     });
 
-    await page.route('**/api/metrics/course/1', async route => {
+    await page.route('**/api/v1/metrics/cursos/1', async route => {
       await route.fulfill({
         json: {
           course_id: 1,
@@ -206,13 +206,13 @@ test.describe('Autenticación y Dashboard', () => {
       });
     });
 
-    await page.route('**/api/metrics/course/1/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/interacciones*', async route => {
       await route.fulfill({
         json: { items: [], total: 0, limit: 10, offset: 0 }
       });
     });
 
-    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes', async route => {
       await route.fulfill({
         json: []
       });
@@ -231,7 +231,7 @@ test.describe('Autenticación y Dashboard', () => {
     await expect(page.locator('h2').filter({ hasText: 'Dashboard de Curso 1' })).toBeVisible();
 
     // 2. Simulamos que a partir de ahora, el backend rechaza con 401 (token expirado 15min)
-    await page.route('**/api/metrics/course/1/student/99', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes/99', async route => {
       await route.fulfill({ status: 401, json: { detail: "Token expired" } });
     });
 

@@ -10,22 +10,22 @@ test.describe('Dashboard de Estudiantes', () => {
     await page.fill('input[type="password"]', 'Profesor1!');
     
     // Mock token API
-    await page.route('**/api/token', async route => {
+    await page.route('**/api/v1/token', async route => {
       // Usamos el token mockeado idéntico al que genera dashboard.spec.ts para que decodifique a admin/teacher con allowed_courses: [1]
       const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsIm1vb2RsZV91c2VyX2lkIjoxLCJpc190ZWFjaGVyIjp0cnVlLCJhbGxvd2VkX2NvdXJzZXMiOlsxXSwiZXhwIjo5OTk5OTk5OTk5fQ.invalid_sig_but_ok_for_mock";
       await route.fulfill({ json: { access_token: token, token_type: 'bearer' } });
     });
 
     // Mock TeacherHome (mis cursos)
-    await page.route('**/api/metrics/course/1', async route => {
+    await page.route('**/api/v1/metrics/cursos/1', async route => {
       await route.fulfill({ json: { total_interactions: 10, interactions_by_type: {}, percentiles: { p25: 0, p50: 0, p75: 0, p90: 0, unique_users: 10 } } });
     });
-    await page.route('**/api/metrics/course/1/interactions*', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/interacciones*', async route => {
       await route.fulfill({ json: { items: [], total: 0 } });
     });
     
     // El nuevo endpoint /metrics/cursos/1/estudiantes
-    await page.route('**/api/metrics/cursos/1/estudiantes', async route => {
+    await page.route('**/api/v1/metrics/cursos/1/estudiantes', async route => {
       const json = {
         course_id: 1,
         students: [
@@ -50,6 +50,8 @@ test.describe('Dashboard de Estudiantes', () => {
 
     // El login redirige a /
     await expect(page).toHaveURL('/');
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: "screenshot_before_click.png", fullPage: true });
     
     // Hacemos click en la tarjeta del curso 1
     await page.click('text=Curso 1');

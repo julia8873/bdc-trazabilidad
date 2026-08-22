@@ -73,8 +73,8 @@ def verify_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def verificar_permisos(course_id: int, user: AuthenticatedUser = Depends(verify_token)):
-    if course_id not in user.allowed_courses:
+def verificar_permisos(curso_id: int, user: AuthenticatedUser = Depends(verify_token)):
+    if curso_id not in user.allowed_courses:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Acceso denegado a este curso"

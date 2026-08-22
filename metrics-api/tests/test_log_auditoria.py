@@ -24,7 +24,7 @@ def test_log_invalid_jwt(client, db_session):
     token = jwt.encode(payload, "wrong_secret", algorithm=JWT_ALGORITHM)
     
     headers = {"Authorization": f"Bearer {token}"}
-    response = client.get("/metrics/course/1", headers=headers)
+    response = client.get("/v1/metrics/cursos/1", headers=headers)
     assert response.status_code == 401
     
     log = db_session.query(AuditoriaAcceso).filter_by(moodle_username="student_invalid").first()

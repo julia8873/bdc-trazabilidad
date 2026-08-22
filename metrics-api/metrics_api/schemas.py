@@ -57,3 +57,31 @@ class CourseStudentsResponse(BaseModel):
     """Modelo para lista de estudiantes."""
     course_id: int
     students: List[StudentCourseItem]
+
+from typing import Literal
+
+class CriterioEvaluacion(BaseModel):
+    nombre: str
+    observacion: str
+
+class AgentSummaryResponse(BaseModel):
+    estado: Literal["evaluado", "sin_actividad"]
+    criterios: List[CriterioEvaluacion] = []
+    fortalezas: List[str] = []
+    patrones_uso: List[str] = []
+    senales_alerta: List[str] = []
+    version_rubrica: str = ""
+    resumen_hash: str = ""
+
+class AgentFollowUpMessage(BaseModel):
+    rol: Literal["user", "assistant"]
+    contenido: str
+
+class AgentFollowUpRequest(BaseModel):
+    mensaje: str
+    historial: List[AgentFollowUpMessage] = []
+    resumen_hash: str
+
+class AgentFollowUpResponse(BaseModel):
+    respuesta: str
+    historial_actualizado: List[AgentFollowUpMessage] = []
