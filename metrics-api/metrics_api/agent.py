@@ -324,3 +324,103 @@ No inventes datos que no estuvieran en tu evaluación original."""
         respuesta=llm_result_text,
         historial_actualizado=new_history
     )
+
+from metrics_api.schemas import TimelineDetalladoResponse, TimelineDetalladoItem
+from metrics_api.models import Interaccion
+from sqlalchemy.orm import Session
+
+async def get_timeline_detallado(session: Session, curso_id: int, alumno_id: int, limit: int, offset: int) -> TimelineDetalladoResponse:
+    # 1. Obtener URL del repo del alumno
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
+    if not repo_url:
+        return TimelineDetalladoResponse(items=[], total=0, limit=limit, offset=offset)
+        
+    parts = repo_url.rstrip("/").split("/")
+    if len(parts) < 2:
+        return TimelineDetalladoResponse(items=[], total=0, limit=limit, offset=offset)
+    owner = parts[-2]
+    repo = parts[-1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    
+    # 2. Consultar interacciones desde DB (paginadas)
+    query = session.query(Interaccion).filter(
+        Interaccion.moodle_course_id == curso_id,
+        Interaccion.moodle_user_id == alumno_id,
+        Interaccion.tipo_interaccion == "chat"
+    ).order_by(Interaccion.timestamp.desc())
+    
+    total = query.count()
+    interacciones = query.offset(offset).limit(limit).all()
+    
+    if not interacciones:
+        return TimelineDetalladoResponse(items=[], total=total, limit=limit, offset=offset)
+        
+    # 3. Extraer todos los shas de las interacciones paginadas
+    items = []
+    github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN_AGENT")
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+        
+    async with httpx.AsyncClient() as client:
+        for interaccion in interacciones:
+            sha = interaccion.referencia_evento
+            item = TimelineDetalladoItem(
+                timestamp=interaccion.timestamp,
+                referencia_evento=sha,
+                tipo_interaccion=interaccion.tipo_interaccion
+            )
+            
+            if sha:
+                # Obtener el commit
+                try:
+                    commit_resp = await client.get(
+                        f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}",
+                        headers=headers
+                    )
+                    if commit_resp.status_code == 200:
+                        commit_data = commit_resp.json()
+                        # Buscar archivos jsonl en el commit
+                        for file in commit_data.get("files", []):
+                            filename = file.get("filename", "")
+                            if "logs/interacciones/" in filename and filename.endswith(".jsonl"):
+                                patch = file.get("patch", "")
+                                # Extraer la línea añadida
+                                for line in patch.split('\n'):
+                                    if line.startswith('+') and not line.startswith('+++'):
+                                        try:
+                                            log_data = json.loads(line[1:])
+                                            # Chequear si este log_data corresponde a este sha
+                                            # En Fase 10.5, log_data.get("commit_sha") no esta en github pero podemos confiar en que es la misma
+                                            if not item.mensaje_alumno:
+                                                item.mensaje_alumno = log_data.get("mensaje_alumno")
+                                            if not item.respuesta_bot:
+                                                item.respuesta_bot = log_data.get("respuesta_bot")
+                                            if "conceptos_cubiertos" in log_data:
+                                                item.conceptos = log_data.get("conceptos_cubiertos", [])
+                                        except:
+                                            pass
+                            elif "okf/entities/" in filename and filename.endswith("_conceptos.jsonl"):
+                                patch = file.get("patch", "")
+                                for line in patch.split('\n'):
+                                    if line.startswith('+') and not line.startswith('+++'):
+                                        try:
+                                            log_data = json.loads(line[1:])
+                                            if log_data.get("interaction_hash") == sha:
+                                                item.conceptos = log_data.get("conceptos", [])
+                                        except:
+                                            pass
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"Error fetching commit {sha}: {e}")
+                    
+            items.append(item)
+            
+    return TimelineDetalladoResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset
+    )

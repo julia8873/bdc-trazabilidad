@@ -85,3 +85,14 @@ class AgentFollowUpRequest(BaseModel):
 class AgentFollowUpResponse(BaseModel):
     respuesta: str
     historial_actualizado: List[AgentFollowUpMessage] = []
+
+class TimelineDetalladoItem(BaseModel):
+    timestamp: datetime
+    referencia_evento: str
+    tipo_interaccion: str
+    conceptos: List[str] = []
+    mensaje_alumno: Optional[str] = None
+    respuesta_bot: Optional[str] = None
+
+class TimelineDetalladoResponse(PaginatedResponse):
+    items: List[TimelineDetalladoItem]

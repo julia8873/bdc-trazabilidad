@@ -49,3 +49,19 @@ export interface StudentMetrics {
   total_interactions: number;
   interactions_by_type: Record<string, number>;
 }
+
+export interface TimelineDetalladoItem {
+  timestamp: string;
+  referencia_evento: string;
+  tipo_interaccion: string;
+  conceptos: string[];
+  mensaje_alumno: string | null;
+  respuesta_bot: string | null;
+}
+
+export interface TimelineDetalladoResponse {
+  items: TimelineDetalladoItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}

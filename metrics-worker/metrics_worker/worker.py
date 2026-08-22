@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from metrics_api.db import SessionLocal
 from metrics_api.models import EventoSync, DiscrepanciaAuditoria, Interaccion
-from shared_pkg.okf_contract import COMMIT_MSG_INGEST, COMMIT_MSG_REVERT, COMMIT_MSG_SYNC, COMMIT_MSG_LOG
+from shared_pkg.okf_contract import COMMIT_MSG_INGEST, COMMIT_MSG_REVERT, COMMIT_MSG_SYNC, COMMIT_MSG_LOG, COMMIT_MSG_CONCEPTOS
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -277,7 +277,8 @@ class SyncEventWorker:
                     if not (commit_msg.startswith(COMMIT_MSG_INGEST) or 
                             commit_msg.startswith(COMMIT_MSG_REVERT) or 
                             commit_msg.startswith(COMMIT_MSG_SYNC) or
-                            commit_msg.startswith(COMMIT_MSG_LOG)):
+                            commit_msg.startswith(COMMIT_MSG_LOG) or
+                            commit_msg.startswith(COMMIT_MSG_CONCEPTOS)):
                         continue
                     
                     existe_sync = db.query(EventoSync).filter(EventoSync.commit_sha == sha).first()

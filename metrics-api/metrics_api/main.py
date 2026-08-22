@@ -505,7 +505,8 @@ def logout(request: Request, response: Response, session: Session = Depends(get_
     response.delete_cookie("refresh_token")
     return {"status": "ok"}
 
-from metrics_api.agent import generar_resumen, seguimiento_resumen
+from metrics_api.agent import generar_resumen, seguimiento_resumen, get_timeline_detallado
+from metrics_api.schemas import TimelineDetalladoResponse
 
 @app.get("/v1/capacidades")
 def get_capacidades():
@@ -520,3 +521,16 @@ async def api_generar_resumen(curso_id: int, alumno_id: int, user: Authenticated
 async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
     return await seguimiento_resumen(curso_id, alumno_id, req)
+
+@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/timeline_detallado", response_model=TimelineDetalladoResponse)
+async def api_timeline_detallado(
+    curso_id: int, 
+    alumno_id: int, 
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: AuthenticatedUser = Depends(verify_token),
+    session: Session = Depends(get_session)
+):
+    if not user.is_teacher and user.moodle_user_id != alumno_id:
+        raise HTTPException(status_code=403, detail="No puedes ver el timeline de otro alumno")
+    return await get_timeline_detallado(session, curso_id, alumno_id, limit, offset)
