@@ -277,8 +277,7 @@ class SyncEventWorker:
                     if not (commit_msg.startswith(COMMIT_MSG_INGEST) or 
                             commit_msg.startswith(COMMIT_MSG_REVERT) or 
                             commit_msg.startswith(COMMIT_MSG_SYNC) or
-                            commit_msg.startswith(COMMIT_MSG_LOG) or
-                            commit_msg.startswith(COMMIT_MSG_CONCEPTOS)):
+                            commit_msg.startswith(COMMIT_MSG_LOG)):
                         continue
                     
                     existe_sync = db.query(EventoSync).filter(EventoSync.commit_sha == sha).first()
