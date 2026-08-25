@@ -53,8 +53,8 @@ async def main():
     import subprocess
     GITHUB_PAT = os.getenv("GITHUB_PAT")
     if not GITHUB_PAT:
-        print("GITHUB_PAT no configurado. Omitiendo E2E push.")
-        return
+        print("Error: GITHUB_PAT no definido. Este test de E2E requiere credenciales reales.")
+        sys.exit(1)
         
     # Extraer repo basename y usuario del URL
     import re
@@ -73,7 +73,8 @@ async def main():
     with open(fake_file, "w") as f:
         f.write("e2e test")
         
-    subprocess.run(f"git add . && git commit -m 'E2E test commit' && git push", shell=True, cwd="/tmp/e2e-test-repo", check=True)
+    from shared_pkg.okf_contract import COMMIT_MSG_INTERACCION
+    subprocess.run(f"git add . && git commit -m '{COMMIT_MSG_INTERACCION}' && git push", shell=True, cwd="/tmp/e2e-test-repo", check=True)
     
     REAL_COMMIT = subprocess.check_output("git rev-parse HEAD", shell=True, cwd="/tmp/e2e-test-repo").decode().strip()
     print(f"-> Commit generado exitosamente: {REAL_COMMIT}")
