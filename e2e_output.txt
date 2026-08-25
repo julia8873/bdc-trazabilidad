@@ -1,0 +1,34 @@
+2026-08-25 18:22:25,594 - metrics_worker - INFO - Timings cargados: poll=15s, reconciliation=86400s
+Iniciando TRUE E2E (Fase 8 - Flujo Completo con Push Real)
+DB Metrics y Mapeo Limpias.
+-> Clonando y generando un nuevo commit real en GitHub...
+Cloning into '/tmp/e2e-test-repo'...
+[main 39526a5] Extracción automática de interacciones
+ 1 file changed, 1 insertion(+)
+ create mode 100644 e2e_4dc4c7e0.txt
+To https://github.com/julia8873/e2e-test-repo.git
+   6e2fd27..39526a5  main -> main
+-> Commit generado exitosamente: 39526a592ae737d6e41c700b7bc5e2474647435a
+Paso 1: Bot reporta evento a mapeo-api...
+2026-08-25 18:22:28,433 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8001/eventos "HTTP/1.1 201 Created"
+Evento 39526a592ae737d6e41c700b7bc5e2474647435a insertado en mapeo-api correctamente.
+2026-08-25 18:22:28,442 - httpx - INFO - HTTP Request: GET http://127.0.0.1:8001/eventos-recientes "HTTP/1.1 200 OK"
+mapeo-api GET /eventos-recientes funciona.
+Paso 3: Worker consume feed desde mapeo-api...
+2026-08-25 18:22:28,443 - metrics_worker - INFO - Iniciando metrics_worker con dos bucles independientes.
+2026-08-25 18:22:28,457 - httpx - INFO - HTTP Request: GET http://127.0.0.1:8001/v1/eventos-recientes "HTTP/1.1 200 OK"
+2026-08-25 18:22:28,466 - httpx - INFO - HTTP Request: GET http://127.0.0.1:8001/v1/mapeos "HTTP/1.1 200 OK"
+2026-08-25 18:22:28,476 - metrics_worker - INFO - Feed consumer: 1 eventos nuevos registrados.
+EXITO Bucle 1: Evento 39526a592ae737d6e41c700b7bc5e2474647435a insertado en la BD local de trazabilidad (eventos_sync).
+Paso 4: Worker audita el historial completo de GitHub...
+2026-08-25 18:22:28,478 - metrics_worker - INFO - Iniciando auditoria completa de reconciliacion.
+2026-08-25 18:22:28,491 - httpx - INFO - HTTP Request: GET http://127.0.0.1:8001/v1/mapeos "HTTP/1.1 200 OK"
+2026-08-25 18:22:28,932 - httpx - INFO - HTTP Request: GET https://api.github.com/repos/julia8873/e2e-test-repo/commits?since=2026-08-25T18:20:44Z "HTTP/1.1 200 OK"
+DEBUG: Found 2 commits for julia8873/e2e-test-repo since 2026-08-25T18:20:44Z
+2026-08-25 18:22:28,942 - metrics_worker - WARNING - Auditoria: Discrepancia detectada (Missing) para commit 6e2fd27a22ca550c4c34dc4b74b247f787a82285
+2026-08-25 18:22:28,947 - metrics_worker - INFO - Auditoria completa finalizada.
+EXITO Bucle 2 (Detección Negativa): Para el commit 39526a592ae737d6e41c700b7bc5e2474647435a que sí está en eventos_sync, NO se generó discrepancia falsa.
+Paso 6: Verificando idempotencia con segundo POST...
+2026-08-25 18:22:28,961 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8001/eventos "HTTP/1.1 409 Conflict"
+EXITO Idempotencia: El segundo POST devolvió 409 Conflict.
+E2E True Finalizado Exitosamente.
