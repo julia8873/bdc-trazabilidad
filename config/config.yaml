@@ -8,6 +8,8 @@ timings:
   poll_interval_sec: 15
   # Worker: intervalo de auditoría completa de GitHub (Bucle 2)
   reconciliation_interval_sec: 86400
+  # Batching para extracción de interacciones (Fase 11)
+  batching_interacciones_sec: 300
   # metrics-api: duración del access token JWT
   access_token_expire_minutes: 15
   # metrics-api: duración del refresh token

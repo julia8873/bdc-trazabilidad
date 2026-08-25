@@ -9,6 +9,7 @@ services:
     command: ["sh", "-c", "pip install -e . && uvicorn metrics_api.main:app --host 0.0.0.0 --port 8000"]
     volumes:
       - ./metrics-api:/app
+      - ./config:/config
     working_dir: /app
     networks:
       - bdc-net

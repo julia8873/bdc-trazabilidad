@@ -520,3 +520,154 @@ async def api_generar_resumen(curso_id: int, alumno_id: int, user: Authenticated
 async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
     return await seguimiento_resumen(curso_id, alumno_id, req)
+
+
+# --- FASE 11: Endpoints de Interacciones ---
+
+import httpx
+import json
+import re
+from fastapi import HTTPException
+from metrics_api.agent import get_mapeo
+from metrics_api.schemas import PaginatedInteraccionesMetadatos, InteraccionMetadatos, InteraccionContenidoResponse
+from metrics_api.auth import AuthenticatedUser
+
+async def get_all_jsonls_from_dir(repo_url: str, dir_path: str) -> list:
+    github_token = os.getenv("GITHUB_TOKEN_AGENT")
+    if not github_token:
+        raise HTTPException(status_code=500, detail="GITHUB_TOKEN_AGENT no configurado")
+    
+    parts = repo_url.rstrip("/").split("/")
+    if len(parts) < 2:
+        return []
+    owner, repo = parts[-2], parts[-1]
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{dir_path}"
+    all_lines = []
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                return []
+            resp.raise_for_status()
+            files = resp.json()
+            if not isinstance(files, list):
+                files = [files]
+                
+            for file_info in files:
+                if file_info["name"].endswith(".jsonl") and file_info["type"] == "file":
+                    raw_resp = await client.get(file_info["download_url"], headers={"Authorization": f"Bearer {github_token}"})
+                    if raw_resp.status_code == 200:
+                        for line in raw_resp.text.splitlines():
+                            if line.strip():
+                                try:
+                                    all_lines.append(json.loads(line))
+                                except:
+                                    pass
+            return all_lines
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error leyendo de GitHub: {str(e)}")
+
+def redactar_pii(texto: str) -> str:
+    if not isinstance(texto, str):
+        return texto
+    # Redactar emails
+    texto = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[DATO REDACTADO]', texto)
+    # Redactar secuencias de 8 o más dígitos, opcionalmente terminadas en letra (como DNI)
+    texto = re.sub(r'\b\d{8,}[a-zA-Z]?\b', '[DATO REDACTADO]', texto)
+    return texto
+
+@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones", response_model=PaginatedInteraccionesMetadatos)
+async def get_interacciones_metadatos(
+    curso_id: int, 
+    alumno_id: int,
+    tipo: Optional[str] = None,
+    concepto: Optional[str] = None,
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: AuthenticatedUser = Depends(verificar_permisos)
+):
+    if not user.is_teacher and user.moodle_user_id != alumno_id:
+        raise HTTPException(status_code=403, detail="No puedes ver esto")
+        
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
+    if not repo_url:
+        return PaginatedInteraccionesMetadatos(items=[], total=0, limit=limit, offset=offset)
+        
+    data = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    
+    # Sort data descending by timestamp
+    data.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    
+    # Filtrar
+    filtered = []
+    for d in data:
+        t = d.get("tipo_interaccion", "")
+        c = d.get("concepto", [])
+        if tipo and tipo != t:
+            continue
+        if concepto and concepto not in c:
+            continue
+        
+        # ID generado a partir del timestamp para usarlo en contenido
+        ts = d.get("timestamp", "")
+        # Usamos el timestamp puro como ID (o un hash). El timestamp es único suficiente.
+        # Hashear el timestamp para que sea un UUID string o simplemente url safe string
+        import hashlib
+        id_str = hashlib.sha256(ts.encode()).hexdigest()[:16]
+        
+        filtered.append(InteraccionMetadatos(
+            timestamp=ts,
+            id=id_str,
+            tipo_interaccion=t,
+            concepto=c
+        ))
+        
+    paginated = filtered[offset:offset+limit]
+    return PaginatedInteraccionesMetadatos(items=paginated, total=len(filtered), limit=limit, offset=offset)
+
+@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones/{interaccion_id}/contenido", response_model=InteraccionContenidoResponse)
+async def get_interaccion_contenido(
+    curso_id: int, 
+    alumno_id: int,
+    interaccion_id: str,
+    user: AuthenticatedUser = Depends(verificar_permisos)
+):
+    if not user.is_teacher and user.moodle_user_id != alumno_id:
+        raise HTTPException(status_code=403, detail="No puedes ver esto")
+        
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
+    if not repo_url:
+        raise HTTPException(status_code=404, detail="Repo no encontrado")
+        
+    # Leemos del LOG de RAG original! (Fase 7) para evitar duplicación.
+    # La ruta es logs/interacciones/
+    data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
+    
+    for d in data:
+        ts = d.get("timestamp", "")
+        import hashlib
+        d_id = hashlib.sha256(ts.encode()).hexdigest()[:16]
+        if d_id == interaccion_id:
+            # Encontramos el mensaje original
+            msg = d.get("mensaje_alumno", "")
+            bot = d.get("respuesta_bot", "")
+            
+            contenido_completo = f"Alumno:\n{msg}\n\nBot:\n{bot}"
+            contenido_redactado = redactar_pii(contenido_completo)
+            
+            return InteraccionContenidoResponse(
+                timestamp=ts,
+                id=d_id,
+                contenido_redactado=contenido_redactado
+            )
+            
+    raise HTTPException(status_code=404, detail="Contenido no encontrado")
+

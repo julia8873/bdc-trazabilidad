@@ -52,7 +52,10 @@ async def main():
     print("-> Clonando y generando un nuevo commit real en GitHub...")
     import subprocess
     GITHUB_PAT = os.getenv("GITHUB_PAT")
-    
+    if not GITHUB_PAT:
+        print("GITHUB_PAT no configurado. Omitiendo E2E push.")
+        return
+        
     # Extraer repo basename y usuario del URL
     import re
     match = re.match(r"https://github\.com/(.+?)/(.+?)\.git", e2e_fork_url)

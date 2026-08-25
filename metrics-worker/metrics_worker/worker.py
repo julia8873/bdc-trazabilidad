@@ -274,9 +274,11 @@ class SyncEventWorker:
                             pass
                     
                     commit_msg = commit.get("commit", {}).get("message", "")
+                    from shared_pkg.okf_contract import COMMIT_MSG_INTERACCION
                     if not (commit_msg.startswith(COMMIT_MSG_INGEST) or 
                             commit_msg.startswith(COMMIT_MSG_REVERT) or 
                             commit_msg.startswith(COMMIT_MSG_SYNC) or
+                            commit_msg.startswith(COMMIT_MSG_INTERACCION) or
                             commit_msg.startswith(COMMIT_MSG_LOG)):
                         continue
                     

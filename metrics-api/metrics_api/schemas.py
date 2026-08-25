@@ -85,3 +85,19 @@ class AgentFollowUpRequest(BaseModel):
 class AgentFollowUpResponse(BaseModel):
     respuesta: str
     historial_actualizado: List[AgentFollowUpMessage] = []
+
+# --- Fase 11: Extracción de interacciones ---
+
+class InteraccionMetadatos(BaseModel):
+    timestamp: str
+    id: str  # id generado para poder consultarlo
+    tipo_interaccion: str
+    concepto: List[str]
+
+class PaginatedInteraccionesMetadatos(PaginatedResponse):
+    items: List[InteraccionMetadatos]
+
+class InteraccionContenidoResponse(BaseModel):
+    timestamp: str
+    id: str
+    contenido_redactado: str
