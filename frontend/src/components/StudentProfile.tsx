@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { apiClient } from '../lib/apiClient';
-import type { StudentMetrics, TimelineDetalladoResponse } from '../lib/api';
-import { BookOpen, Activity, User, Bot, Search, ArrowDown, ArrowUp, Check } from 'lucide-react';
+import type { StudentMetrics, TimelineDetalladoResponse, AgentSummaryResponse, AgentFollowUpMessage } from '../lib/api';
+import { BookOpen, Activity, User, Bot, Search, ArrowDown, ArrowUp, Check, Brain, Send, AlertTriangle, Lightbulb } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const StudentProfile: React.FC = () => {
@@ -15,6 +15,14 @@ export const StudentProfile: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
+
+  // Estados del Agente Evaluador
+  const [agentSummary, setAgentSummary] = useState<AgentSummaryResponse | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState<string>('');
+  const [agentChat, setAgentChat] = useState<AgentFollowUpMessage[]>([]);
+  const [agentInput, setAgentInput] = useState('');
+  const [agentChatLoading, setAgentChatLoading] = useState(false);
 
   const location = useLocation();
   const studentName = location.state?.studentName || `Alumno ${studentId}`;
@@ -85,6 +93,56 @@ export const StudentProfile: React.FC = () => {
       nextSet.add(c);
     }
     setSelectedConcepts(nextSet);
+  };
+
+  const generateEvaluation = async () => {
+    try {
+      setAgentLoading(true);
+      setAgentError('');
+      const res = await apiClient(`/v1/cursos/${courseId}/estudiantes/${studentId}/resumen`, {
+        method: 'POST'
+      });
+      if (res.status === 503) throw new Error('El Agente Evaluador no está habilitado en este entorno.');
+      if (res.status === 403) throw new Error('No tienes permisos para evaluar a este alumno.');
+      if (!res.ok) throw new Error('Error al generar la evaluación del agente.');
+      
+      const data = await res.json();
+      setAgentSummary(data);
+      setAgentChat([]); // Reset chat when generating new summary
+    } catch (err: any) {
+      setAgentError(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const sendFollowUpMessage = async () => {
+    if (!agentInput.trim() || !agentSummary?.resumen_hash) return;
+    
+    const newMessage: AgentFollowUpMessage = { rol: 'user', contenido: agentInput };
+    const currentChat = [...agentChat, newMessage];
+    setAgentChat(currentChat);
+    setAgentInput('');
+    setAgentChatLoading(true);
+
+    try {
+      const res = await apiClient(`/v1/cursos/${courseId}/estudiantes/${studentId}/resumen/seguimiento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mensaje: newMessage.contenido,
+          historial: agentChat,
+          resumen_hash: agentSummary.resumen_hash
+        })
+      });
+      if (!res.ok) throw new Error('Error al enviar mensaje de seguimiento.');
+      const data = await res.json();
+      setAgentChat(data.historial_actualizado);
+    } catch (err: any) {
+      setAgentError('Fallo en el chat de seguimiento: ' + err.message);
+    } finally {
+      setAgentChatLoading(false);
+    }
   };
 
   return (
@@ -202,6 +260,116 @@ export const StudentProfile: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="card mt-8 mb-8" style={{ border: '2px solid var(--primary)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: 'var(--primary)' }}></div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Brain size={24} color="var(--primary)" />
+            <h3 style={{ margin: 0 }}>Evaluación Automática (LLM-as-a-Judge)</h3>
+          </div>
+          {!agentSummary && (
+            <button 
+              onClick={generateEvaluation}
+              disabled={agentLoading}
+              className="btn"
+              style={{ backgroundColor: 'var(--primary)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: 'var(--radius)', cursor: agentLoading ? 'not-allowed' : 'pointer', opacity: agentLoading ? 0.7 : 1 }}
+            >
+              {agentLoading ? 'Evaluando...' : 'Solicitar Evaluación a la IA'}
+            </button>
+          )}
+        </div>
+
+        {agentError && <div style={{ color: 'var(--danger)', marginBottom: '1rem', padding: '1rem', backgroundColor: 'rgba(255,0,0,0.1)', borderRadius: 'var(--radius)' }}>{agentError}</div>}
+
+        {agentSummary && agentSummary.estado === "evaluado" && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem', borderRadius: 'var(--radius)' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0, color: 'var(--primary)' }}><Lightbulb size={18} /> Fortalezas</h4>
+                <ul style={{ paddingLeft: '1.2rem', margin: 0, fontSize: '0.9rem' }}>
+                  {agentSummary.fortalezas.map((f, i) => <li key={i} style={{ marginBottom: '0.5rem' }}>{f}</li>)}
+                </ul>
+              </div>
+              <div style={{ backgroundColor: 'var(--bg-main)', padding: '1rem', borderRadius: 'var(--radius)' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0, color: '#f59e0b' }}><AlertTriangle size={18} /> Señales de Alerta</h4>
+                <ul style={{ paddingLeft: '1.2rem', margin: 0, fontSize: '0.9rem' }}>
+                  {agentSummary.senales_alerta.length > 0 ? agentSummary.senales_alerta.map((s, i) => <li key={i} style={{ marginBottom: '0.5rem' }}>{s}</li>) : <li style={{ color: 'var(--text-muted)' }}>No se detectaron alertas críticas.</li>}
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ marginTop: 0 }}>Criterios de Evaluación</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+                {agentSummary.criterios.map((c, i) => (
+                  <div key={i} style={{ padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', backgroundColor: 'var(--bg-main)' }}>
+                    <strong>{c.nombre}</strong>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{c.observacion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem', marginTop: '0.5rem' }}>
+              <h4 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Bot size={18} /> Chat de Seguimiento</h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Puedes conversar con el agente evaluador sobre este reporte.</p>
+              
+              {agentChat.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1rem', maxHeight: '300px', overflowY: 'auto', padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                  {agentChat.map((msg, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '1rem', flexDirection: msg.rol === 'user' ? 'row' : 'row-reverse' }}>
+                      <div style={{ backgroundColor: msg.rol === 'user' ? 'var(--bg-main)' : 'var(--primary)', color: msg.rol === 'user' ? 'inherit' : 'white', padding: '0.5rem', borderRadius: '50%', height: 'fit-content', border: msg.rol === 'user' ? '1px solid var(--border)' : 'none' }}>
+                        {msg.rol === 'user' ? <User size={16} /> : <Brain size={16} />}
+                      </div>
+                      <div style={{ 
+                        backgroundColor: msg.rol === 'user' ? 'white' : 'var(--primary)', 
+                        color: msg.rol === 'user' ? 'inherit' : 'white',
+                        border: msg.rol === 'user' ? '1px solid var(--border)' : 'none', 
+                        padding: '0.75rem 1rem', 
+                        borderRadius: msg.rol === 'user' ? '0 1rem 1rem 1rem' : '1rem 0 1rem 1rem', 
+                        flex: 1, 
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '0.9rem'
+                      }}>
+                        {msg.contenido}
+                      </div>
+                    </div>
+                  ))}
+                  {agentChatLoading && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>El agente está escribiendo...</div>}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                  type="text" 
+                  value={agentInput}
+                  onChange={e => setAgentInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendFollowUpMessage()}
+                  placeholder="Ej: ¿Por qué consideras que le falta base matemática?"
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none' }}
+                  disabled={agentChatLoading}
+                />
+                <button 
+                  onClick={sendFollowUpMessage}
+                  disabled={agentChatLoading || !agentInput.trim()}
+                  style={{ backgroundColor: 'var(--primary)', color: 'white', border: 'none', padding: '0 1rem', borderRadius: 'var(--radius)', cursor: (agentChatLoading || !agentInput.trim()) ? 'not-allowed' : 'pointer', opacity: (agentChatLoading || !agentInput.trim()) ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+        )}
+        
+        {agentSummary && agentSummary.estado === "sin_actividad" && (
+          <div style={{ padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', textAlign: 'center', color: 'var(--text-muted)' }}>
+            El alumno no tiene suficiente actividad (mensajes procesados) para generar una evaluación.
+          </div>
+        )}
       </div>
 
       <div className="card mt-8">
