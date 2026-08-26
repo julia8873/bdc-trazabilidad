@@ -529,7 +529,7 @@ import json
 import re
 from fastapi import HTTPException
 from metrics_api.agent import get_mapeo
-from metrics_api.schemas import PaginatedInteraccionesMetadatos, InteraccionMetadatos, InteraccionContenidoResponse
+from metrics_api.schemas import PaginatedInteraccionesMetadatos, InteraccionMetadatos, InteraccionContenidoResponse, ConceptosFrecuenciasResponse
 from metrics_api.auth import AuthenticatedUser
 
 async def get_all_jsonls_from_dir(repo_url: str, dir_path: str) -> list:
@@ -631,6 +631,33 @@ async def get_interacciones_metadatos(
         
     paginated = filtered[offset:offset+limit]
     return PaginatedInteraccionesMetadatos(items=paginated, total=len(filtered), limit=limit, offset=offset)
+
+@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/conceptos", response_model=ConceptosFrecuenciasResponse)
+async def get_conceptos_frecuencias(
+    curso_id: int, 
+    alumno_id: int,
+    user: AuthenticatedUser = Depends(verificar_permisos)
+):
+    if not user.is_teacher and user.moodle_user_id != alumno_id:
+        raise HTTPException(status_code=403, detail="No puedes ver esto")
+        
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
+    if not repo_url:
+        return ConceptosFrecuenciasResponse(conceptos={})
+        
+    data = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    
+    conceptos_dict = {}
+    for d in data:
+        # Solo contamos si no es fuera_de_ambito, o los contamos todos? 
+        # La instrucción dice "Muestra, por concepto, cuántas veces se ha tratado". Los fuera_de_ambito no tienen conceptos relevantes o si tienen, no cuentan. Asumiremos contar todos los conceptos presentes.
+        c_list = d.get("concepto", [])
+        for c in c_list:
+            if c:
+                conceptos_dict[c] = conceptos_dict.get(c, 0) + 1
+                
+    return ConceptosFrecuenciasResponse(conceptos=conceptos_dict)
 
 @app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones/{interaccion_id}/contenido", response_model=InteraccionContenidoResponse)
 async def get_interaccion_contenido(

@@ -231,10 +231,20 @@ async def generar_resumen(curso_id: int, alumno_id: int) -> AgentSummaryResponse
             
     repo_url = mapeo.get("repo_url")
     if not repo_url:
+        _SUMMARY_CACHE[cache_key] = {
+            "summary": {"estado": "sin_actividad", "resumen_hash": "", "version_rubrica": "1.0"},
+            "timestamp": now,
+            "facts": []
+        }
         return AgentSummaryResponse(estado="sin_actividad")
         
     diffs = await get_github_diffs(repo_url)
     if not diffs.strip():
+        _SUMMARY_CACHE[cache_key] = {
+            "summary": {"estado": "sin_actividad", "resumen_hash": "", "version_rubrica": "1.0"},
+            "timestamp": now,
+            "facts": []
+        }
         return AgentSummaryResponse(estado="sin_actividad")
         
     rubrica = load_rubric()
@@ -273,9 +283,15 @@ Devuelve estrictamente un JSON con esta estructura exacta (no añadas nada más,
     
     summary_dict["resumen_hash"] = generate_summary_hash(curso_id, alumno_id, summary_dict)
     
+    # Importar get_all_jsonls_from_dir localmente para evitar dependencias circulares complejas si es necesario
+    # o usarlo desde metrics_api.main si se puede
+    from metrics_api.main import get_all_jsonls_from_dir
+    hechos_crudos = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    
     _SUMMARY_CACHE[cache_key] = {
         "summary": summary_dict,
-        "timestamp": now
+        "timestamp": now,
+        "facts": hechos_crudos
     }
     
     return AgentSummaryResponse(**summary_dict)
@@ -295,22 +311,31 @@ async def seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpR
     if cache_key not in _SUMMARY_CACHE:
         raise HTTPException(status_code=400, detail="No existe un resumen activo para seguir la conversación.")
         
-    cached = _SUMMARY_CACHE[cache_key]["summary"]
+    cached_full = _SUMMARY_CACHE[cache_key]
+    cached = cached_full["summary"]
+    hechos = cached_full.get("facts", [])
+    
     # Verify hash
     expected_hash = cached.get("resumen_hash")
-    if not expected_hash or not hmac.compare_digest(expected_hash, req.resumen_hash):
+    # If there is no hash expected (e.g. sin_actividad) or the hash doesn't match
+    if expected_hash and not hmac.compare_digest(expected_hash, req.resumen_hash):
         raise HTTPException(status_code=400, detail="El hash del resumen no coincide o la conversación ha sido manipulada.")
         
     system_prompt = """Eres el mismo asistente que evaluó al estudiante. 
 Responde de forma concisa y directa a la pregunta del profesor sobre la evaluación.
-No inventes datos que no estuvieran en tu evaluación original."""
+Cuando el profesor pregunte "¿por qué...?" o pida justificación, debes citar los hechos concretos que se adjuntan en tu contexto (tipo de interacción, concepto, fecha/timestamp). 
+Si no hay hechos suficientes para justificar una afirmación con detalle en base a la información extraída, o si la lista de interacciones adjunta está completamente vacía, debes declararlo explícitamente y negarte a inventar una justificación.
+No inventes datos que no estuvieran en tu evaluación original o en los hechos adjuntos."""
 
     # Build context
     historial_text = ""
     for msg in req.historial:
         historial_text += f"{msg.rol.upper()}: {msg.contenido}\n"
         
-    user_content = f"Evaluación original:\n{json.dumps(cached, indent=2)}\n\nHistorial:\n{historial_text}\nPROFESOR: {req.mensaje}"
+    # Prepare facts for context
+    hechos_context = json.dumps(hechos, ensure_ascii=False) if hechos else "[] (Cero hechos registrados)"
+        
+    user_content = f"Evaluación original:\n{json.dumps(cached, indent=2)}\n\nHechos Reales Extraídos:\n{hechos_context}\n\nHistorial:\n{historial_text}\nPROFESOR: {req.mensaje}"
     
     # LLM Call
     llm_result_text = await invoke_llm(system_prompt, user_content, response_format="text")

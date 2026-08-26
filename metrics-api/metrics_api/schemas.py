@@ -101,3 +101,6 @@ class InteraccionContenidoResponse(BaseModel):
     timestamp: str
     id: str
     contenido_redactado: str
+
+class ConceptosFrecuenciasResponse(BaseModel):
+    conceptos: Dict[str, int]

@@ -49,3 +49,44 @@ export interface StudentMetrics {
   total_interactions: number;
   interactions_by_type: Record<string, number>;
 }
+
+export interface ConceptosFrecuenciasResponse {
+  conceptos: Record<string, number>;
+}
+
+export interface InteraccionContenidoResponse {
+  timestamp: string;
+  id: string;
+  contenido_redactado: string;
+}
+
+export interface CriterioEvaluacion {
+  nombre: string;
+  observacion: string;
+}
+
+export interface AgentSummaryResponse {
+  estado: "evaluado" | "sin_actividad";
+  criterios: CriterioEvaluacion[];
+  fortalezas: string[];
+  patrones_uso: string[];
+  senales_alerta: string[];
+  version_rubrica: string;
+  resumen_hash: string;
+}
+
+export interface AgentFollowUpMessage {
+  rol: "user" | "assistant";
+  contenido: string;
+}
+
+export interface AgentFollowUpRequest {
+  mensaje: string;
+  historial: AgentFollowUpMessage[];
+  resumen_hash: string;
+}
+
+export interface AgentFollowUpResponse {
+  respuesta: string;
+  historial_actualizado: AgentFollowUpMessage[];
+}
