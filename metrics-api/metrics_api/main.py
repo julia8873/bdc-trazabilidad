@@ -231,7 +231,7 @@ def get_course_students(response: Response, request: Request,
     )
 
 @app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}", response_model=StudentMetricsResponse)
-def get_student_metrics(response: Response, request: Request, 
+async def get_student_metrics(response: Response, request: Request, 
     curso_id: int, estudiante_id: int,
     session: Session = Depends(get_session),
     user: AuthenticatedUser = Depends(verificar_permisos)
@@ -243,11 +243,19 @@ def get_student_metrics(response: Response, request: Request,
     # Como la regla dice "200 con total_interactions: 0 no 404", lo retornamos directamente.
     total, by_type = get_student_aggregates(session, estudiante_id, curso_id)
     
+    from metrics_api.agent import get_mapeo
+    try:
+        mapeo = await get_mapeo(curso_id, estudiante_id)
+        repo_url = mapeo.get("repo_url")
+    except:
+        repo_url = None
+    
     return StudentMetricsResponse(
         student_id=estudiante_id,
         course_id=curso_id,
         total_interactions=total,
-        interactions_by_type=by_type
+        interactions_by_type=by_type,
+        repo_url=repo_url
     )
 
 @app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}/interacciones", response_model=PaginatedInteractions)
@@ -511,12 +519,12 @@ from metrics_api.agent import generar_resumen, seguimiento_resumen
 def get_capacidades():
     return {"ENABLE_EVALUATION_AGENT": os.getenv("ENABLE_EVALUATION_AGENT", "false").lower() == "true"}
 
-@app.post("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/resumen", response_model=AgentSummaryResponse)
+@app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/resumen", response_model=AgentSummaryResponse)
 async def api_generar_resumen(curso_id: int, alumno_id: int, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
     return await generar_resumen(curso_id, alumno_id)
 
-@app.post("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/resumen/seguimiento", response_model=AgentFollowUpResponse)
+@app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/resumen/seguimiento", response_model=AgentFollowUpResponse)
 async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
     return await seguimiento_resumen(curso_id, alumno_id, req)
@@ -540,18 +548,22 @@ async def get_all_jsonls_from_dir(repo_url: str, dir_path: str) -> list:
     parts = repo_url.rstrip("/").split("/")
     if len(parts) < 2:
         return []
-    owner, repo = parts[-2], parts[-1]
+    owner, repo = parts[-2], parts[-1].replace(".git", "")
     
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github.v3+json"
     }
     
-    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{dir_path}"
+    import time
+    cache_buster = int(time.time() * 1000)
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{dir_path}?ref=main&_cb={cache_buster}"
+    print(f"DEBUG: Fetching directory from {url}")
     all_lines = []
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, headers=headers)
+            print(f"DEBUG: Directory fetch status: {resp.status_code}")
             if resp.status_code == 404:
                 return []
             resp.raise_for_status()
@@ -559,18 +571,38 @@ async def get_all_jsonls_from_dir(repo_url: str, dir_path: str) -> list:
             if not isinstance(files, list):
                 files = [files]
                 
+            import time
+            cache_buster = int(time.time())
+                
+            print(f"DEBUG: Found {len(files)} files in directory")
             for file_info in files:
                 if file_info["name"].endswith(".jsonl") and file_info["type"] == "file":
-                    raw_resp = await client.get(file_info["download_url"], headers={"Authorization": f"Bearer {github_token}"})
+                    # Use API url to avoid 5-minute raw.githubusercontent cache
+                    file_api_url = file_info["url"]
+                    separator = "&" if "?" in file_api_url else "?"
+                    file_api_url = f"{file_api_url}{separator}_cb={cache_buster}"
+                    
+                    print(f"DEBUG: Fetching file {file_info['name']} from {file_api_url}")
+                    raw_resp = await client.get(file_api_url, headers=headers)
+                    print(f"DEBUG: Status {raw_resp.status_code}")
                     if raw_resp.status_code == 200:
-                        for line in raw_resp.text.splitlines():
-                            if line.strip():
-                                try:
-                                    all_lines.append(json.loads(line))
-                                except:
-                                    pass
+                        import base64
+                        content_b64 = raw_resp.json().get("content", "")
+                        print(f"DEBUG: Got b64 content len {len(content_b64)}")
+                        if content_b64:
+                            content = base64.b64decode(content_b64).decode('utf-8')
+                            lines_found = 0
+                            for line in content.splitlines():
+                                if line.strip():
+                                    try:
+                                        all_lines.append(json.loads(line))
+                                        lines_found += 1
+                                    except:
+                                        pass
+                            print(f"DEBUG: Parsed {lines_found} JSON lines")
             return all_lines
         except Exception as e:
+            print(f"DEBUG: Exception {e}")
             raise HTTPException(status_code=500, detail=f"Error leyendo de GitHub: {str(e)}")
 
 def redactar_pii(texto: str) -> str:
@@ -582,7 +614,7 @@ def redactar_pii(texto: str) -> str:
     texto = re.sub(r'\b\d{8,}[a-zA-Z]?\b', '[DATO REDACTADO]', texto)
     return texto
 
-@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones", response_model=PaginatedInteraccionesMetadatos)
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones", response_model=PaginatedInteraccionesMetadatos)
 async def get_interacciones_metadatos(
     curso_id: int, 
     alumno_id: int,
@@ -600,7 +632,7 @@ async def get_interacciones_metadatos(
     if not repo_url:
         return PaginatedInteraccionesMetadatos(items=[], total=0, limit=limit, offset=offset)
         
-    data = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
     
     # Sort data descending by timestamp
     data.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -632,7 +664,7 @@ async def get_interacciones_metadatos(
     paginated = filtered[offset:offset+limit]
     return PaginatedInteraccionesMetadatos(items=paginated, total=len(filtered), limit=limit, offset=offset)
 
-@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/conceptos", response_model=ConceptosFrecuenciasResponse)
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/conceptos", response_model=ConceptosFrecuenciasResponse)
 async def get_conceptos_frecuencias(
     curso_id: int, 
     alumno_id: int,
@@ -640,13 +672,16 @@ async def get_conceptos_frecuencias(
 ):
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
+    
+    if user.is_teacher and curso_id not in user.allowed_courses:
+        raise HTTPException(status_code=403, detail="No tienes permiso para ver este curso")
         
     mapeo = await get_mapeo(curso_id, alumno_id)
     repo_url = mapeo.get("repo_url")
     if not repo_url:
         return ConceptosFrecuenciasResponse(conceptos={})
         
-    data = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
     
     conceptos_dict = {}
     for d in data:
@@ -659,12 +694,13 @@ async def get_conceptos_frecuencias(
                 
     return ConceptosFrecuenciasResponse(conceptos=conceptos_dict)
 
-@app.get("/v1/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones/{interaccion_id}/contenido", response_model=InteraccionContenidoResponse)
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/interacciones/{interaccion_id}/contenido", response_model=InteraccionContenidoResponse)
 async def get_interaccion_contenido(
     curso_id: int, 
     alumno_id: int,
     interaccion_id: str,
-    user: AuthenticatedUser = Depends(verificar_permisos)
+    user: AuthenticatedUser = Depends(verificar_permisos),
+    session: Session = Depends(get_session)
 ):
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
@@ -674,27 +710,45 @@ async def get_interaccion_contenido(
     if not repo_url:
         raise HTTPException(status_code=404, detail="Repo no encontrado")
         
-    # Leemos del LOG de RAG original! (Fase 7) para evitar duplicación.
-    # La ruta es logs/interacciones/
+    # Look up in DB by UUID
+    from metrics_api.models import Interaccion
+    from datetime import datetime
+    try:
+        import uuid
+        uid = uuid.UUID(interaccion_id)
+        interaccion = session.query(Interaccion).filter(Interaccion.id == uid).first()
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID de interacción inválido")
+        
+    if not interaccion:
+        raise HTTPException(status_code=404, detail="Interacción no encontrada en DB")
+
+    # Leemos del LOG de RAG original! (Fase 7)
     data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
+    print("Found data records:", len(data))
     
     for d in data:
-        ts = d.get("timestamp", "")
-        import hashlib
-        d_id = hashlib.sha256(ts.encode()).hexdigest()[:16]
-        if d_id == interaccion_id:
-            # Encontramos el mensaje original
-            msg = d.get("mensaje_alumno", "")
-            bot = d.get("respuesta_bot", "")
+        ts_str = d.get("timestamp", "")
+        if not ts_str:
+            continue
+        try:
+            # Parse jsonl timestamp to naive datetime to match DB
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            # Compare with interaccion.timestamp with a tolerance of 60 seconds
+            diff = abs((ts - interaccion.timestamp).total_seconds())
+            print(f"Comparing jsonl ts {ts} with DB ts {interaccion.timestamp} -> Diff {diff}")
+            if diff <= 60:
+                msg = d.get("mensaje_alumno", "")
+                bot = d.get("respuesta_bot", "")
+                
+                return InteraccionContenidoResponse(
+                    timestamp=ts_str,
+                    id=interaccion_id,
+                    mensaje_alumno=redactar_pii(msg),
+                    respuesta_bot=redactar_pii(bot)
+                )
+        except Exception:
+            continue
             
-            contenido_completo = f"Alumno:\n{msg}\n\nBot:\n{bot}"
-            contenido_redactado = redactar_pii(contenido_completo)
-            
-            return InteraccionContenidoResponse(
-                timestamp=ts,
-                id=d_id,
-                contenido_redactado=contenido_redactado
-            )
-            
-    raise HTTPException(status_code=404, detail="Contenido no encontrado")
+    raise HTTPException(status_code=404, detail="Contenido no encontrado en los logs de GitHub")
 
