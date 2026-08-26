@@ -93,31 +93,31 @@ export const CourseDashboard: React.FC = () => {
   });
 
   return (
-    <div className="container">
+    <div className="container animate-slide-up">
       <div className="mb-8 flex justify-between items-center">
         <h2>Dashboard de {COURSE_NAMES[Number(courseId)] || `Curso ${courseId}`}</h2>
-        <button onClick={() => navigate('/')} className="button" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-main)' }}>
+        <button onClick={() => navigate('/')} className="btn-ghost" style={{ backgroundColor: 'var(--bg-card)' }}>
           Volver a Mis Cursos
         </button>
       </div>
 
       <div className="grid grid-cols-3 mb-8">
-        <div className="card flex items-center gap-4">
-          <div style={{ padding: '1rem', backgroundColor: '#e0f2fe', color: 'var(--primary)', borderRadius: '50%' }}>
-            <Activity size={24} />
+        <div className="card hover-lift flex items-center gap-4">
+          <div style={{ padding: '1rem', backgroundColor: 'var(--primary-light)', color: 'var(--primary)', borderRadius: 'var(--radius)' }}>
+            <Activity size={28} />
           </div>
           <div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Total Interacciones</p>
-            <h3>{metrics.total_interactions}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500 }}>Total Interacciones</p>
+            <h3 style={{ fontSize: '1.75rem', marginTop: '0.25rem' }}>{metrics.total_interactions}</h3>
           </div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div style={{ padding: '1rem', backgroundColor: '#e0f2fe', color: 'var(--primary)', borderRadius: '50%' }}>
-            <Users size={24} />
+        <div className="card hover-lift flex items-center gap-4">
+          <div style={{ padding: '1rem', backgroundColor: 'var(--success-light)', color: 'var(--success)', borderRadius: 'var(--radius)' }}>
+            <Users size={28} />
           </div>
           <div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Alumnos que han interactuado</p>
-            <h3>{metrics.percentiles.unique_users || 0}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500 }}>Alumnos activos</p>
+            <h3 style={{ fontSize: '1.75rem', marginTop: '0.25rem' }}>{metrics.percentiles.unique_users || 0}</h3>
           </div>
         </div>
       </div>
@@ -141,33 +141,33 @@ export const CourseDashboard: React.FC = () => {
           )}
         </div>
 
-        <div className="card">
+        <div className="card hover-lift">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 size={20} color="var(--text-muted)" />
+            <BarChart3 size={20} color="var(--primary)" />
             <h3 style={{ margin: 0 }}>Percentiles de Interacción</h3>
           </div>
           
           {metrics.percentiles.unique_users < 5 ? (
             <div className="empty-state" style={{ padding: '2rem 1rem' }}>
-              <p>Datos insuficientes para el cálculo de percentiles.</p>
-              <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>Se requieren al menos 5 alumnos interactuando.</p>
+              <p>Datos insuficientes para percentiles.</p>
+              <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>Se requieren al menos 5 alumnos activos.</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex justify-between items-center" style={{ padding: '0.75rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                <span style={{ fontWeight: 500 }}>Percentil 90 (Top 10%)</span>
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-center" style={{ padding: '0.8rem 1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontWeight: 500 }}>Top 10% (p90)</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>{metrics.percentiles.p90}</span>
               </div>
-              <div className="flex justify-between items-center" style={{ padding: '0.75rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                <span style={{ fontWeight: 500 }}>Percentil 75 (Cuartil Superior)</span>
+              <div className="flex justify-between items-center" style={{ padding: '0.8rem 1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontWeight: 500 }}>Cuartil Superior (p75)</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>{metrics.percentiles.p75}</span>
               </div>
-              <div className="flex justify-between items-center" style={{ padding: '0.75rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                <span style={{ fontWeight: 500 }}>Percentil 50 (Mediana)</span>
+              <div className="flex justify-between items-center" style={{ padding: '0.8rem 1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontWeight: 500 }}>Mediana (p50)</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>{metrics.percentiles.p50}</span>
               </div>
-              <div className="flex justify-between items-center" style={{ padding: '0.75rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                <span style={{ fontWeight: 500 }}>Percentil 25 (Cuartil Inferior)</span>
+              <div className="flex justify-between items-center" style={{ padding: '0.8rem 1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontWeight: 500 }}>Cuartil Inferior (p25)</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-muted)' }}>{metrics.percentiles.p25}</span>
               </div>
             </div>
@@ -214,7 +214,7 @@ export const CourseDashboard: React.FC = () => {
             <select 
               value={sortField} 
               onChange={(e) => setSortField(e.target.value as SortField)}
-              style={{ padding: '0.25rem 0.5rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-main)' }}
+              style={{ padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-main)' }}
             >
               <option value="name">Nombre</option>
               <option value="interactions">Nº interacciones</option>
@@ -222,8 +222,9 @@ export const CourseDashboard: React.FC = () => {
               <option value="status">Estado de sincronización</option>
             </select>
             <button 
+              className="btn-ghost"
               onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-              style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-main)', cursor: 'pointer' }}
+              style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--border)' }}
             >
               {sortDirection === 'asc' ? '↑ Asc' : '↓ Desc'}
             </button>
