@@ -31,6 +31,21 @@ export interface PaginatedInteractions {
   offset: number;
 }
 
+/** Respuesta del endpoint /interacciones de Fase 11 (metadatos desde GitHub) */
+export interface InteraccionMetadatos {
+  timestamp: string;
+  id: string;
+  tipo_interaccion: string;
+  concepto: string[];
+}
+
+export interface PaginatedInteraccionesMetadatos {
+  items: InteraccionMetadatos[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface CourseMetrics {
   course_id: number;
   total_interactions: number;

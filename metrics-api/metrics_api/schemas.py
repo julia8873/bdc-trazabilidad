@@ -43,6 +43,7 @@ class StudentMetricsResponse(BaseModel):
     course_id: int
     total_interactions: int
     interactions_by_type: Dict[str, int]
+    repo_url: Optional[str] = None
 
 class StudentCourseItem(BaseModel):
     """Item de curso para estudiante."""
@@ -100,7 +101,8 @@ class PaginatedInteraccionesMetadatos(PaginatedResponse):
 class InteraccionContenidoResponse(BaseModel):
     timestamp: str
     id: str
-    contenido_redactado: str
+    mensaje_alumno: str
+    respuesta_bot: str
 
 class ConceptosFrecuenciasResponse(BaseModel):
     conceptos: Dict[str, int]

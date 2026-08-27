@@ -103,11 +103,13 @@ class SyncEventWorker:
         db = SessionLocal()
         try:
             procesados = 0
+            vistos_en_batch = set()
             for event in events:
                 commit_sha = event.get("commit_sha")
-                if not commit_sha:
+                if not commit_sha or commit_sha in vistos_en_batch:
                     continue
                 
+                vistos_en_batch.add(commit_sha)
                 existe = db.query(EventoSync).filter(EventoSync.commit_sha == commit_sha).first()
                 if not existe:
                     m = mapeo_dict.get(event.get("matrix_room_id"), {})
@@ -139,14 +141,16 @@ class SyncEventWorker:
                             
                         tipo = "chat" if event.get("tipo_evento") == "INTERACTION" else "file_upload"
                             
-                        db_int = Interaccion(
-                            moodle_user_id=moodle_user_id,
-                            moodle_course_id=moodle_course_id,
-                            tipo_interaccion=tipo,
-                            referencia_evento=commit_sha,
-                            timestamp=ts
-                        )
-                        db.add(db_int)
+                        existe_int = db.query(Interaccion).filter(Interaccion.referencia_evento == commit_sha).first()
+                        if not existe_int:
+                            db_int = Interaccion(
+                                moodle_user_id=moodle_user_id,
+                                moodle_course_id=moodle_course_id,
+                                tipo_interaccion=tipo,
+                                referencia_evento=commit_sha,
+                                timestamp=ts
+                            )
+                            db.add(db_int)
                         
                     procesados += 1
             if procesados > 0:

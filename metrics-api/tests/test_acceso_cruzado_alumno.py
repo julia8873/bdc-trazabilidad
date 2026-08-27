@@ -53,3 +53,19 @@ def test_student_cannot_access_course_aggregates(client, db_session):
     response = client.get("/v1/metrics/cursos/1/interacciones", headers=headers)
     assert response.status_code == 403
     assert "Solo profesores pueden ver interacciones del curso" in response.json()["detail"]
+
+def test_teacher_cannot_access_other_course_conceptos(client, db_session):
+    payload = {
+        "sub": "teacher_1",
+        "moodle_user_id": 100,
+        "is_teacher": True,
+        "allowed_courses": [2] # The teacher owns course 2, but will try to access course 1
+    }
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Try to access another student's concepts in a course the teacher does NOT own
+    response = client.get("/v1/cursos/1/estudiantes/2/conceptos", headers=headers)
+    assert response.status_code == 403
+    assert "No tienes permiso para ver este curso" in response.json()["detail"]

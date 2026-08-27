@@ -620,6 +620,9 @@ async def get_interacciones_metadatos(
     alumno_id: int,
     tipo: Optional[str] = None,
     concepto: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: AuthenticatedUser = Depends(verificar_permisos)
@@ -634,8 +637,25 @@ async def get_interacciones_metadatos(
         
     data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
     
-    # Sort data descending by timestamp
-    data.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    # TODO (Fase 13): Eliminar este bloque de compatibilidad temporal una vez confirmado que no quedan 
+    # ficheros JSONL con formato antiguo (pre-11.1) en ningún repositorio de alumno activo.
+    # COMPATIBILIDAD TEMPORAL: datos históricos (formato pre-11.1) tienen dos líneas por interacción.
+    seen_timestamps: set[str] = set()
+    dedup_data = []
+    for d in data:
+        ts = d.get("timestamp", "")
+        has_tipo = "tipo_interaccion" in d
+        if ts in seen_timestamps:
+            continue  # ya procesamos este timestamp (preferimos el registro con tipo)
+        if not has_tipo and any(
+            other.get("timestamp") == ts and "tipo_interaccion" in other
+            for other in data
+        ):
+            continue  # hay un registro con tipo_interaccion para este ts — saltamos el crudo
+        seen_timestamps.add(ts)
+        dedup_data.append(d)
+        
+    data = dedup_data
     
     # Filtrar
     filtered = []
@@ -646,11 +666,17 @@ async def get_interacciones_metadatos(
             continue
         if concepto and concepto not in c:
             continue
+            
+        # Filtrado search SÓLO en metadatos para evitar PII
+        if search:
+            search_lower = search.lower()
+            t_lower = t.lower() if t else ""
+            c_lower = [str(concept).lower() for concept in c]
+            if search_lower not in t_lower and not any(search_lower in concept for concept in c_lower):
+                continue
         
         # ID generado a partir del timestamp para usarlo en contenido
         ts = d.get("timestamp", "")
-        # Usamos el timestamp puro como ID (o un hash). El timestamp es único suficiente.
-        # Hashear el timestamp para que sea un UUID string o simplemente url safe string
         import hashlib
         id_str = hashlib.sha256(ts.encode()).hexdigest()[:16]
         
@@ -660,6 +686,17 @@ async def get_interacciones_metadatos(
             tipo_interaccion=t,
             concepto=c
         ))
+        
+    # Ordenar
+    if sort_by == "timestamp":
+        reverse = (sort_dir == "desc") if sort_dir else True
+        filtered.sort(key=lambda x: x.timestamp, reverse=reverse)
+    elif sort_by == "tipo_interaccion":
+        reverse = (sort_dir == "desc") if sort_dir else False
+        filtered.sort(key=lambda x: x.tipo_interaccion, reverse=reverse)
+    else:
+        # Sort data descending by timestamp by default
+        filtered.sort(key=lambda x: x.timestamp, reverse=True)
         
     paginated = filtered[offset:offset+limit]
     return PaginatedInteraccionesMetadatos(items=paginated, total=len(filtered), limit=limit, offset=offset)
@@ -710,45 +747,36 @@ async def get_interaccion_contenido(
     if not repo_url:
         raise HTTPException(status_code=404, detail="Repo no encontrado")
         
-    # Look up in DB by UUID
-    from metrics_api.models import Interaccion
-    from datetime import datetime
-    try:
-        import uuid
-        uid = uuid.UUID(interaccion_id)
-        interaccion = session.query(Interaccion).filter(Interaccion.id == uid).first()
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID de interacción inválido")
-        
-    if not interaccion:
-        raise HTTPException(status_code=404, detail="Interacción no encontrada en DB")
-
-    # Leemos del LOG de RAG original! (Fase 7)
     data = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
-    print("Found data records:", len(data))
+    import hashlib
     
     for d in data:
         ts_str = d.get("timestamp", "")
         if not ts_str:
             continue
-        try:
-            # Parse jsonl timestamp to naive datetime to match DB
-            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
-            # Compare with interaccion.timestamp with a tolerance of 60 seconds
-            diff = abs((ts - interaccion.timestamp).total_seconds())
-            print(f"Comparing jsonl ts {ts} with DB ts {interaccion.timestamp} -> Diff {diff}")
-            if diff <= 60:
-                msg = d.get("mensaje_alumno", "")
-                bot = d.get("respuesta_bot", "")
+            
+        id_str = hashlib.sha256(ts_str.encode()).hexdigest()[:16]
+        if id_str == interaccion_id:
+            msg = d.get("mensaje_alumno")
+            bot = d.get("respuesta_bot")
+            
+            # TODO (Fase 13): Bloque de compatibilidad temporal (formato pre-11.1)
+            if msg is None and bot is None:
+                for other in data:
+                    if other.get("timestamp") == ts_str and "mensaje_alumno" in other:
+                        msg = other.get("mensaje_alumno", "")
+                        bot = other.get("respuesta_bot", "")
+                        break
+            else:
+                msg = msg or ""
+                bot = bot or ""
                 
-                return InteraccionContenidoResponse(
-                    timestamp=ts_str,
-                    id=interaccion_id,
-                    mensaje_alumno=redactar_pii(msg),
-                    respuesta_bot=redactar_pii(bot)
-                )
-        except Exception:
-            continue
+            return InteraccionContenidoResponse(
+                timestamp=ts_str,
+                id=interaccion_id,
+                mensaje_alumno=redactar_pii(msg),
+                respuesta_bot=redactar_pii(bot)
+            )
             
     raise HTTPException(status_code=404, detail="Contenido no encontrado en los logs de GitHub")
 

@@ -286,7 +286,7 @@ Devuelve estrictamente un JSON con esta estructura exacta (no añadas nada más,
     # Importar get_all_jsonls_from_dir localmente para evitar dependencias circulares complejas si es necesario
     # o usarlo desde metrics_api.main si se puede
     from metrics_api.main import get_all_jsonls_from_dir
-    hechos_crudos = await get_all_jsonls_from_dir(repo_url, "okf/interacciones")
+    hechos_crudos = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
     
     _SUMMARY_CACHE[cache_key] = {
         "summary": summary_dict,
