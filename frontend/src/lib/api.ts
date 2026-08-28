@@ -19,8 +19,7 @@ export interface Interaction {
   moodle_user_id: number;
   moodle_course_id: number;
   tipo_interaccion: string;
-  referencia_evento?: string;
-  concepto?: string[] | null;
+  referencia_evento: string | null;
   metadatos: any | null;
 }
 
@@ -64,7 +63,6 @@ export interface StudentMetrics {
   course_id: number;
   total_interactions: number;
   interactions_by_type: Record<string, number>;
-  repo_url?: string;
 }
 
 export interface ConceptosFrecuenciasResponse {
@@ -74,8 +72,7 @@ export interface ConceptosFrecuenciasResponse {
 export interface InteraccionContenidoResponse {
   timestamp: string;
   id: string;
-  mensaje_alumno: string;
-  respuesta_bot: string;
+  contenido_redactado: string;
 }
 
 export interface CriterioEvaluacion {
