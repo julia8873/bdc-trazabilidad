@@ -7,10 +7,13 @@ DATABASE_URL = os.getenv(
     "postgresql://metrics_user:metrics_pass@postgres:5432/mapeo_db"
 )
 
-# Connect to the metrics schema
+connect_args = {}
+if "postgresql" in DATABASE_URL:
+    connect_args = {"options": "-csearch_path=metrics"}
+
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"options": "-csearch_path=metrics"}
+    connect_args=connect_args
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

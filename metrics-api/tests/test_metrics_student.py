@@ -73,11 +73,13 @@ def test_student_interactions_pagination_limits(client):
     response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones?offset=-1", headers=headers)
     assert response.status_code == 422
 
-def test_student_interactions_with_data(client, db_session):
-    # Alumno 1 en curso 1 con 2 interacciones
-    db_session.add(Interaccion(moodle_user_id=1, moodle_course_id=1, tipo_interaccion="chat", timestamp=datetime.utcnow()))
-    db_session.add(Interaccion(moodle_user_id=1, moodle_course_id=1, tipo_interaccion="wiki", timestamp=datetime.utcnow()))
-    db_session.commit()
+def test_student_interactions_with_data(client, monkeypatch):
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr("metrics_api.main.get_mapeo", AsyncMock(return_value={"repo_url": "https://github.com/test/repo"}))
+    monkeypatch.setattr("metrics_api.main.get_all_jsonls_from_dir", AsyncMock(return_value=[
+        {"timestamp": "2026-08-28T10:00:00Z", "tipo_interaccion": "chat", "concepto": ["c1"]},
+        {"timestamp": "2026-08-28T10:05:00Z", "tipo_interaccion": "wiki", "concepto": ["c2"]}
+    ]))
 
     response = client.get("/v1/metrics/cursos/1/estudiantes/1/interacciones", headers=headers)
     assert response.status_code == 200

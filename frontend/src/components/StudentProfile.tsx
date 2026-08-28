@@ -587,16 +587,14 @@ export const StudentProfile: React.FC = () => {
                   className="flex items-center justify-between"
                   style={{
                     padding: '0.875rem 1rem',
-                    cursor: item.tipo_interaccion ? 'pointer' : 'default',
+                    cursor: 'pointer',
                     backgroundColor: expandedId === item.id ? 'var(--bg-main)' : 'transparent',
                     transition: 'background-color 0.15s'
                   }}
-                  onClick={() => item.tipo_interaccion && toggleExpand(item.id)}
+                  onClick={() => toggleExpand(item.id)}
                 >
                   <div className="flex items-center gap-3">
-                    {item.tipo_interaccion
-                      ? (expandedId === item.id ? <ChevronDown size={18} /> : <ChevronRight size={18} />)
-                      : <span style={{ width: 18 }} />}
+                    {expandedId === item.id ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                     <div style={{
                       backgroundColor: item.tipo_interaccion ? 'var(--bg-main)' : 'var(--border)',
                       padding: '0.35rem 0.75rem', borderRadius: '4px',

@@ -258,25 +258,6 @@ async def get_student_metrics(response: Response, request: Request,
         repo_url=repo_url
     )
 
-@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}/interacciones", response_model=PaginatedInteractions)
-def get_student_interactions(response: Response, request: Request, 
-    curso_id: int, estudiante_id: int,
-    limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    session: Session = Depends(get_session),
-    user: AuthenticatedUser = Depends(verificar_permisos)
-):
-
-    if not user.is_teacher and user.moodle_user_id != estudiante_id:
-        raise HTTPException(status_code=403, detail="No puedes ver las métricas de otro alumno")
-    items, total = get_interacciones_by_alumno(session, estudiante_id, curso_id, limit=limit, offset=offset)
-    return PaginatedInteractions(
-        items=items,
-        total=total,
-        limit=limit,
-        offset=offset
-    )
-
 @app.post("/v1/token")
 @app.post("/token", deprecated=True)
 def login(request: LoginRequest, response: Response, session: Session = Depends(get_session)):
@@ -630,8 +611,11 @@ async def get_interacciones_metadatos(
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
         
-    mapeo = await get_mapeo(curso_id, alumno_id)
-    repo_url = mapeo.get("repo_url")
+    try:
+        mapeo = await get_mapeo(curso_id, alumno_id)
+        repo_url = mapeo.get("repo_url")
+    except Exception:
+        repo_url = None
     if not repo_url:
         return PaginatedInteraccionesMetadatos(items=[], total=0, limit=limit, offset=offset)
         
@@ -742,8 +726,11 @@ async def get_interaccion_contenido(
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
         
-    mapeo = await get_mapeo(curso_id, alumno_id)
-    repo_url = mapeo.get("repo_url")
+    try:
+        mapeo = await get_mapeo(curso_id, alumno_id)
+        repo_url = mapeo.get("repo_url")
+    except Exception:
+        repo_url = None
     if not repo_url:
         raise HTTPException(status_code=404, detail="Repo no encontrado")
         
