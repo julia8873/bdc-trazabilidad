@@ -15,7 +15,7 @@ export const TeacherHome: React.FC = () => {
   };
 
   return (
-    <div className="container">
+    <div className="container animate-slide-up">
       <div className="mb-8">
         <h2>Mis Cursos</h2>
         <p style={{ color: 'var(--text-muted)' }}>Selecciona un curso para ver el dashboard y los alumnos matriculados.</p>
@@ -24,13 +24,13 @@ export const TeacherHome: React.FC = () => {
       <div className="grid grid-cols-3">
         {user.allowed_courses.map(courseId => (
           <Link key={courseId} to={`/course/${courseId}`} style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div style={{ padding: '1rem', backgroundColor: '#e0f2fe', color: 'var(--primary)', borderRadius: '50%' }}>
-                <BookOpen size={24} />
+            <div className="card hover-lift flex items-center gap-4">
+              <div style={{ padding: '1.25rem', backgroundColor: 'var(--primary-light)', color: 'var(--primary)', borderRadius: 'var(--radius)' }}>
+                <BookOpen size={28} />
               </div>
               <div>
-                <h3 style={{ margin: 0, color: 'var(--text-main)' }}>{COURSE_NAMES[courseId] || `Curso ${courseId}`}</h3>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>Ver Dashboard</p>
+                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem' }}>{COURSE_NAMES[courseId] || `Curso ${courseId}`}</h3>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>Ver Dashboard &rarr;</p>
               </div>
             </div>
           </Link>
