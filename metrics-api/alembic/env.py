@@ -63,7 +63,12 @@ def run_migrations_online() -> None:
     """
     connectable = db_engine
 
+    from sqlalchemy import text
+
     with connectable.connect() as connection:
+        connection.execute(text("CREATE SCHEMA IF NOT EXISTS metrics;"))
+        connection.commit()
+        
         context.configure(
             connection=connection, 
             target_metadata=target_metadata,

@@ -355,6 +355,7 @@ def login(request: LoginRequest, response: Response, session: Session = Depends(
     if not moodle_authenticated and os.getenv("ENABLE_DEMO_AUTH", "false").lower() == "true":
         if (request.username == "admin" and request.password in ("testpass", "admin")) or \
            (request.username == "profesor1" and request.password == "Profesor1!") or \
+           (request.username == "profesor2" and request.password == "Profesor2!") or \
            (request.username == "alumno1" and request.password == "Alumno1!") or \
            (request.username == "alumno" and request.password == "alumno"):
             moodle_authenticated = True
