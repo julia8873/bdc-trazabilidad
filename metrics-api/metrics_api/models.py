@@ -18,7 +18,7 @@ Asunciones documentadas (borrador pendiente de validación de dominio diferida):
 
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import MetaData
@@ -144,6 +144,12 @@ class DiscrepanciaAuditoria(Base):
     commit_sha = Column(String, nullable=False, index=True)
     tipo_discrepancia = Column(String, nullable=False)
     detalles = Column(JSONB, nullable=True)
+    
+    # Campos para auditoría de resolución
+    resuelta = Column(Integer, default=0, nullable=False)
+    resuelta_at = Column(DateTime, nullable=True)
+    resuelta_por = Column(Integer, nullable=True) # moodle_user_id
+    commit_log_ref = Column(String, nullable=True)
 
 
 class AuditoriaEstado(Base):

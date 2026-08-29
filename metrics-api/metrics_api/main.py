@@ -258,6 +258,70 @@ async def get_student_metrics(response: Response, request: Request,
         repo_url=repo_url
     )
 
+@app.get("/v1/metrics/cursos/{curso_id}/estudiantes/{estudiante_id}/discrepancias")
+async def get_student_discrepancias(
+    curso_id: int, estudiante_id: int,
+    session: Session = Depends(get_session),
+    user: AuthenticatedUser = Depends(verificar_permisos)
+):
+    if not user.is_teacher and user.moodle_user_id != estudiante_id:
+        raise HTTPException(status_code=403, detail="No puedes ver las discrepancias de otro alumno")
+        
+    from metrics_api.models import DiscrepanciaAuditoria
+    discrepancias = session.query(DiscrepanciaAuditoria).filter(
+        DiscrepanciaAuditoria.moodle_user_id == estudiante_id,
+        DiscrepanciaAuditoria.moodle_course_id == curso_id
+    ).order_by(DiscrepanciaAuditoria.timestamp.desc()).all()
+    
+    return {
+        "discrepancias": [
+            {
+                "id": d.id,
+                "commit_sha": d.commit_sha,
+                "tipo_discrepancia": d.tipo_discrepancia,
+                "detalles": d.detalles,
+                "timestamp": d.timestamp,
+                "resuelta": d.resuelta,
+                "resuelta_at": d.resuelta_at,
+                "resuelta_por": d.resuelta_por,
+                "commit_log_ref": d.commit_log_ref
+            }
+            for d in discrepancias
+        ]
+    }
+
+@app.get("/v1/metrics/cursos/{curso_id}/discrepancias")
+async def get_course_discrepancias(
+    curso_id: int,
+    session: Session = Depends(get_session),
+    user: AuthenticatedUser = Depends(verificar_permisos)
+):
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden ver las discrepancias del curso")
+        
+    from metrics_api.models import DiscrepanciaAuditoria
+    discrepancias = session.query(DiscrepanciaAuditoria).filter(
+        DiscrepanciaAuditoria.moodle_course_id == curso_id
+    ).order_by(DiscrepanciaAuditoria.timestamp.desc()).limit(100).all()
+    
+    return {
+        "discrepancias": [
+            {
+                "id": d.id,
+                "moodle_user_id": d.moodle_user_id,
+                "commit_sha": d.commit_sha,
+                "tipo_discrepancia": d.tipo_discrepancia,
+                "detalles": d.detalles,
+                "timestamp": d.timestamp,
+                "resuelta": d.resuelta,
+                "resuelta_at": d.resuelta_at,
+                "resuelta_por": d.resuelta_por,
+                "commit_log_ref": d.commit_log_ref
+            }
+            for d in discrepancias
+        ]
+    }
+
 @app.post("/v1/token")
 @app.post("/token", deprecated=True)
 def login(request: LoginRequest, response: Response, session: Session = Depends(get_session)):
@@ -271,7 +335,7 @@ def login(request: LoginRequest, response: Response, session: Session = Depends(
     try:
         m_res = requests.post(
             moodle_url, 
-            headers={"Host": "localhost:8000"}, # Host esperado por defecto en el dev local
+            headers={"Host": "localhost:8082"}, # Host esperado por defecto en el dev local
             data={"username": request.username, "password": request.password, "service": "moodle_mobile_app"},
             timeout=5
         )
@@ -509,6 +573,264 @@ async def api_generar_resumen(curso_id: int, alumno_id: int, user: Authenticated
 async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
     return await seguimiento_resumen(curso_id, alumno_id, req)
+
+
+# --- Endpoints de Sincronización Manual ---
+
+async def _trigger_reconciliation_for_student(
+    mapeo: dict,
+    session: Session,
+    current_user_id: int
+):
+    """
+    Re-runs the reconciliation audit for a single student mapeo entry.
+    Reuses the same logic as the metrics-worker but executed on-demand.
+    Returns a dict with {'synced': int, 'discrepancias': int}.
+    """
+    import re as _re
+    import httpx as _httpx
+    from metrics_api.models import DiscrepanciaAuditoria, AuditoriaEstado
+    from metrics_api.models import EventoSync
+    from datetime import datetime
+
+    repo_url = mapeo.get("repo_url")
+    if not repo_url:
+        return {"synced": 0, "discrepancias": 0}
+
+    match = _re.search(r"github\.com/([^/]+)/([^/.]+)", repo_url)
+    if not match:
+        return {"synced": 0, "discrepancias": 0}
+
+    owner, repo = match.groups()
+    m_user_id = mapeo.get("moodle_user_id")
+    m_course_id = mapeo.get("moodle_course_id")
+    github_token = os.getenv("GITHUB_TOKEN_AGENT", os.getenv("GITHUB_TOKEN", ""))
+
+    # Fetch commits from GitHub
+    headers = {"Accept": "application/vnd.github+json"}
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    commits = []
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=100"
+    try:
+        async with _httpx.AsyncClient() as client:
+            while url:
+                resp = await client.get(url, headers=headers, timeout=10)
+                if resp.status_code != 200:
+                    break
+                commits.extend(resp.json())
+                link_header = resp.headers.get("Link", "")
+                next_url = None
+                for part in link_header.split(","):
+                    if 'rel="next"' in part:
+                        next_url = part[part.index("<") + 1: part.index(">")]
+                url = next_url
+    except Exception:
+        return {"synced": 0, "discrepancias": 0}
+
+    from metrics_api.models import Interaccion
+
+    # 1. Get unresolved discrepancies instead of deleting them
+    discrepancias_pendientes = session.query(DiscrepanciaAuditoria).filter(
+        DiscrepanciaAuditoria.moodle_user_id == m_user_id,
+        DiscrepanciaAuditoria.moodle_course_id == m_course_id,
+        DiscrepanciaAuditoria.resuelta == 0
+    ).all()
+    discrepancias_dict = {d.commit_sha: d for d in discrepancias_pendientes}
+
+    new_synced = 0
+    mapeo_url = os.getenv("MAPEO_API_URL")
+    mapeo_token = os.getenv("MAPEO_API_TOKEN")
+    
+    async with _httpx.AsyncClient() as client:
+        for commit in commits:
+            sha = commit.get("sha")
+            if not sha:
+                continue
+    
+            commit_msg = commit.get("commit", {}).get("message", "")
+            # Only audit commits that follow the project's naming conventions
+            KNOWN_PREFIXES = ("INGEST:", "REVERT:", "SYNC:", "INTERACCION:", "LOG:")
+            if not any(commit_msg.startswith(p) for p in KNOWN_PREFIXES):
+                continue
+    
+            existe_sync = session.query(EventoSync).filter(EventoSync.commit_sha == sha).first()
+            
+            if not existe_sync:
+                # Sync the missing event
+                db_event = EventoSync(
+                    moodle_user_id=m_user_id,
+                    moodle_course_id=m_course_id,
+                    commit_sha=sha,
+                    tipo_evento="INTERACTION" if commit_msg.startswith("INTERACCION:") else "INGEST",
+                    estado="SUCCESS",
+                    resultado={"verified_via_feed": False, "triggered_by": "manual_sync"}
+                )
+                session.add(db_event)
+                
+                try:
+                    commit_date_str = commit.get("commit", {}).get("author", {}).get("date", "")
+                    ts = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                except Exception:
+                    ts = datetime.utcnow()
+                    
+                tipo = "chat" if commit_msg.startswith("INTERACCION:") else "file_upload"
+                existe_int = session.query(Interaccion).filter(Interaccion.referencia_evento == sha).first()
+                if not existe_int:
+                    db_int = Interaccion(
+                        moodle_user_id=m_user_id,
+                        moodle_course_id=m_course_id,
+                        tipo_interaccion=tipo,
+                        referencia_evento=sha,
+                        timestamp=ts
+                    )
+                    session.add(db_int)
+                    
+                # Paso 1: Ingerirá el commit huérfano de manera atómica
+                try:
+                    session.commit()
+                    new_synced += 1
+                except Exception as e:
+                    print(f"ERROR COMMIT EVENTO/INTERACCION: {e}")
+                    session.rollback()
+                    continue
+                    
+            # Si hay una discrepancia para este commit, intentar resolverla
+            if sha in discrepancias_dict:
+                discr = discrepancias_dict[sha]
+                
+                # Paso 2: Llamar a mapeo-api para registrar en GitHub
+                payload = {
+                    "moodle_user_id": m_user_id,
+                    "moodle_course_id": m_course_id,
+                    "commit_sha": sha,
+                    "tipo_discrepancia": discr.tipo_discrepancia,
+                    "detalles": discr.detalles,
+                    "resuelta_por": current_user_id,
+                    "resuelta_at": datetime.utcnow().isoformat()
+                }
+                
+                headers_mapeo = {}
+                if mapeo_token:
+                    headers_mapeo["Authorization"] = f"Bearer {mapeo_token}"
+                    
+                try:
+                    res = await client.post(f"{mapeo_url}/v1/audit/discrepancias", json=payload, headers=headers_mapeo, timeout=10)
+                    if res.status_code == 201:
+                        # Paso 3: Llamada exitosa -> actualizar BD
+                        discr.resuelta = 1
+                        discr.resuelta_at = datetime.utcnow()
+                        discr.resuelta_por = current_user_id
+                        discr.commit_log_ref = res.json().get("commit_log_ref")
+                        session.commit()
+                except Exception as e:
+                    # Paso 4: Llamada falla -> No marcar como resuelta
+                    print(f"ERROR LLAMANDO MAPEO-API: {e}")
+    return {"commits_checked": len(commits), "synced": new_synced, "discrepancias": 0}
+
+
+@app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/sync")
+async def api_sync_student(
+    curso_id: int,
+    alumno_id: int,
+    session: Session = Depends(get_session),
+    user: AuthenticatedUser = Depends(verify_token)
+):
+    """Triggers a manual reconciliation audit for a single student."""
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden sincronizar alumnos")
+    if curso_id not in user.allowed_courses:
+        raise HTTPException(status_code=403, detail="No tienes permiso para este curso")
+
+    mapeo_url = os.getenv("MAPEO_API_URL")
+    mapeo_token = os.getenv("MAPEO_API_TOKEN")
+    headers = {}
+    if mapeo_token:
+        headers["Authorization"] = f"Bearer {mapeo_token}"
+
+    try:
+        m_res = requests.get(
+            f"{mapeo_url}/mapeos?moodle_course_id={curso_id}",
+            headers=headers,
+            timeout=5
+        )
+    except requests.RequestException:
+        raise HTTPException(status_code=503, detail="Mapeo API no disponible")
+
+    mapeos = m_res.json() if m_res.ok else []
+    # Filter by student in Python — same pattern as get_course_students
+    mapeo = next(
+        (m for m in mapeos if m.get("moodle_user_id") == alumno_id and not m.get("is_teacher")),
+        None
+    )
+    if not mapeo:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado en el mapeo del curso")
+
+    result = await _trigger_reconciliation_for_student(mapeo, session, user.moodle_user_id)
+    return {"status": "ok", "alumno_id": alumno_id, **result}
+
+
+@app.post("/v1/metrics/cursos/{curso_id}/sync")
+async def api_sync_course(
+    curso_id: int,
+    session: Session = Depends(get_session),
+    user: AuthenticatedUser = Depends(verify_token)
+):
+    """Triggers a manual reconciliation audit for all students with discrepancies in a course."""
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden sincronizar el curso")
+    if curso_id not in user.allowed_courses:
+        raise HTTPException(status_code=403, detail="No tienes permiso para este curso")
+
+    from metrics_api.models import DiscrepanciaAuditoria
+
+    mapeo_url = os.getenv("MAPEO_API_URL")
+    mapeo_token = os.getenv("MAPEO_API_TOKEN")
+    headers_mapeo = {}
+    if mapeo_token:
+        headers_mapeo["Authorization"] = f"Bearer {mapeo_token}"
+
+    try:
+        m_res = requests.get(
+            f"{mapeo_url}/mapeos?moodle_course_id={curso_id}",
+            headers=headers_mapeo,
+            timeout=5
+        )
+    except requests.RequestException:
+        raise HTTPException(status_code=503, detail="Mapeo API no disponible")
+
+    mapeos = m_res.json() if m_res.ok else []
+
+    # Only process students that currently have discrepancies
+    unsynced_ids = {
+        row.moodle_user_id
+        for row in session.query(DiscrepanciaAuditoria.moodle_user_id).filter(
+            DiscrepanciaAuditoria.moodle_course_id == curso_id
+        ).distinct()
+    }
+
+    total_synced = 0
+    total_discrepancias = 0
+    students_processed = 0
+
+    for mapeo in mapeos:
+        if mapeo.get("is_teacher"):
+            continue
+        uid = mapeo.get("moodle_user_id")
+        if uid not in unsynced_ids:
+            continue
+        result = await _trigger_reconciliation_for_student(mapeo, session, user.moodle_user_id)
+        total_synced += result["synced"]
+        total_discrepancias += result["discrepancias"]
+        students_processed += 1
+
+    return {
+        "status": "ok",
+        "students_processed": students_processed,
+        "commits_checked": total_synced,
+        "new_discrepancias": total_discrepancias
+    }
 
 
 # --- FASE 11: Endpoints de Interacciones ---
