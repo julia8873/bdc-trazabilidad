@@ -3,6 +3,9 @@ set -e
 
 MODE=${1:-dev}
 
+# Evitar que Git Bash (MINGW64) convierta rutas como /app o /workspace a rutas de Windows
+export MSYS_NO_PATHCONV=1
+
 echo "=== bdc-trazabilidad: Preparando entorno ($MODE) ==="
 
 # Asegurar que la red bdc-net existe (idempotente)
