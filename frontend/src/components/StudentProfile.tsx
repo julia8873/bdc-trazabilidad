@@ -23,9 +23,9 @@ import {
 type TabId = 'stats' | 'concepts' | 'ai';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'stats',    label: 'Estadísticas',  icon: <BarChart2 size={16} /> },
-  { id: 'concepts', label: 'Conceptos',     icon: <BookOpen  size={16} /> },
-  { id: 'ai',       label: 'Evaluación IA', icon: <Cpu       size={16} /> },
+  { id: 'stats', label: 'Estadísticas', icon: <BarChart2 size={16} /> },
+  { id: 'concepts', label: 'Conceptos', icon: <BookOpen size={16} /> },
+  { id: 'ai', label: 'Evaluación IA', icon: <Cpu size={16} /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,10 +45,10 @@ export const StudentProfile: React.FC = () => {
   const courseName = courseId ? COURSE_NAMES[courseId] || `Curso ${courseId}` : `Curso ${courseId}`;
 
   // ── Data ────────────────────────────────────────────────────────────────────
-  const [metrics, setMetrics]       = useState<StudentMetrics | null>(null);
-  const [conceptos, setConceptos]   = useState<ConceptosFrecuenciasResponse | null>(null);
+  const [metrics, setMetrics] = useState<StudentMetrics | null>(null);
+  const [conceptos, setConceptos] = useState<ConceptosFrecuenciasResponse | null>(null);
   const [syncTrigger, setSyncTrigger] = useState(0);
-  const [error, setError]   = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   // ── Tab ─────────────────────────────────────────────────────────────────────
@@ -56,14 +56,14 @@ export const StudentProfile: React.FC = () => {
 
   // ── Timeline State ──────────────────────────────────────────────────────────
   const [interactions, setInteractions] = useState<PaginatedInteraccionesMetadatos | null>(null);
-  const [filtroTipo, setFiltroTipo]     = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroConceptos, setFiltroConceptos] = useState<string[]>([]);
-  const [searchText, setSearchText]     = useState('');
-  const [sortBy, setSortBy]             = useState<'fecha' | 'tipo'>('fecha');
-  const [sortDir, setSortDir]           = useState<'asc' | 'desc'>('desc');
-  const [expandedId, setExpandedId]     = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [sortBy, setSortBy] = useState<'fecha' | 'tipo'>('fecha');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedContent, setExpandedContent] = useState<Record<string, { alumno: string; bot: string }>>({});
-  const [contentLoading, setContentLoading]   = useState<Record<string, boolean>>({});
+  const [contentLoading, setContentLoading] = useState<Record<string, boolean>>({});
 
   // Debounce search
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,11 +72,11 @@ export const StudentProfile: React.FC = () => {
   // ── Agent State ─────────────────────────────────────────────────────────────
   const [agentSummary, setAgentSummary] = useState<AgentSummaryResponse | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
-  const [agentError, setAgentError]     = useState('');
-  const [agent503, setAgent503]         = useState(false);
-  const [chatHistory, setChatHistory]   = useState<AgentFollowUpMessage[]>([]);
-  const [chatInput, setChatInput]       = useState('');
-  const [chatLoading, setChatLoading]   = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [agent503, setAgent503] = useState(false);
+  const [chatHistory, setChatHistory] = useState<AgentFollowUpMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch student base data ─────────────────────────────────────────────────
@@ -119,9 +119,9 @@ export const StudentProfile: React.FC = () => {
         sort_by: sortBy,
         sort_dir: sortDir,
       });
-      if (filtroTipo)              params.set('tipo', filtroTipo);
-      if (filtroConceptos.length)  params.set('concepto', filtroConceptos.join(','));
-      if (debouncedSearch)         params.set('search', debouncedSearch);
+      if (filtroTipo) params.set('tipo', filtroTipo);
+      if (filtroConceptos.length) params.set('concepto', filtroConceptos.join(','));
+      if (debouncedSearch) params.set('search', debouncedSearch);
 
       const res = await apiClient(
         `/v1/metrics/cursos/${courseId}/estudiantes/${studentId}/interacciones?${params.toString()}`
@@ -315,21 +315,21 @@ export const StudentProfile: React.FC = () => {
               {tiposDisponibles.length === 0
                 ? <p style={{ color: 'var(--text-muted)' }}>Sin datos</p>
                 : tiposDisponibles.map(t => {
-                    const count = metrics.interactions_by_type[t] || 0;
-                    const pct = metrics.total_interactions > 0
-                      ? Math.round((count / metrics.total_interactions) * 100) : 0;
-                    return (
-                      <div key={t}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>{t}</span>
-                          <span style={{ fontWeight: 600 }}>{count} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({pct}%)</span></span>
-                        </div>
-                        <div style={{ height: '6px', borderRadius: '3px', backgroundColor: 'var(--border)' }}>
-                          <div style={{ height: '100%', width: `${pct}%`, borderRadius: '3px', backgroundColor: 'var(--primary)', transition: 'width 0.6s ease' }} />
-                        </div>
+                  const count = metrics.interactions_by_type[t] || 0;
+                  const pct = metrics.total_interactions > 0
+                    ? Math.round((count / metrics.total_interactions) * 100) : 0;
+                  return (
+                    <div key={t}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>{t}</span>
+                        <span style={{ fontWeight: 600 }}>{count} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({pct}%)</span></span>
                       </div>
-                    );
-                  })
+                      <div style={{ height: '6px', borderRadius: '3px', backgroundColor: 'var(--border)' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, borderRadius: '3px', backgroundColor: 'var(--primary)', transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  );
+                })
               }
             </div>
           </div>
@@ -344,7 +344,7 @@ export const StudentProfile: React.FC = () => {
             <h3 style={{ margin: 0 }}>Conceptos Cubiertos</h3>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
-            Haz clic para filtrar la línea temporal (varios — lógica <strong>OR</strong>).
+            Haz clic para filtrar la línea temporal.
             {filtroConceptos.length > 0 && (
               <button
                 onClick={() => setFiltroConceptos([])}
