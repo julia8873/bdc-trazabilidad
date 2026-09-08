@@ -11,7 +11,9 @@ export const TeacherHome: React.FC = () => {
   }
 
   const COURSE_NAMES: Record<number, string> = {
-    3: 'Ecuaciones Diferenciales II'
+    3: 'Ecuaciones Diferenciales II',
+    8: 'UGRinfo Oficial',
+    9: 'NBT Oficial'
   };
 
   return (

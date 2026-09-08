@@ -16,7 +16,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://mapeo_user:mapeo_db_pass@postgres:5432/mapeo_db
       - JWT_SECRET_KEY=dev_secret_key_for_local_testing_only
-      - MAPEO_API_TOKEN=3bf4193fdcf323a82480f7b10345bf25
+      - MAPEO_API_TOKEN=${MAPEO_API_TOKEN}
       - MOODLE_AUTH_URL=http://moodle-matrix-dev-moodle-1:8080/login/token.php
       - MAPEO_API_URL=http://moodle-matrix-dev-mapeo-api-1:8000
       - ENABLE_DEMO_AUTH=true
@@ -39,7 +39,7 @@ services:
       - DATABASE_URL=postgresql://mapeo_user:mapeo_db_pass@postgres:5432/mapeo_db
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - MAPEO_API_URL=http://moodle-matrix-dev-mapeo-api-1:8000
-      - MAPEO_API_TOKEN=3bf4193fdcf323a82480f7b10345bf25
+      - MAPEO_API_TOKEN=${MAPEO_API_TOKEN}
 
   frontend:
     image: node:20-alpine

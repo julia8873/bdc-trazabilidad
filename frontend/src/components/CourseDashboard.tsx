@@ -153,7 +153,9 @@ export const CourseDashboard: React.FC = () => {
   const chartData = Object.entries(metrics.interactions_by_type).map(([name, value]) => ({ name, value }));
 
   const COURSE_NAMES: Record<number, string> = {
-    3: 'Ecuaciones Diferenciales II'
+    3: 'Ecuaciones Diferenciales II',
+    8: 'UGRinfo Oficial',
+    9: 'NBT Oficial'
   };
 
   const sortedStudents = [...students].sort((a, b) => {
