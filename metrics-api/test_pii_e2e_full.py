@@ -67,6 +67,15 @@ def test_e2e_1_vault_almacena_y_bloquea_sin_auth():
         f"Debería rechazar sin JWT, devolvió {r2.status_code}: {r2.text}"
     )
 
+    # Limpieza
+    engine = _db_engine()
+    with engine.connect() as conn:
+        conn.execute(
+            text("DELETE FROM metrics.pii_vault WHERE interaction_id = :iid"),
+            {"iid": interaction_id},
+        )
+        conn.commit()
+
 
 # ── E2E-2: reversión auditada con JWT de profesor ─────────────────────────
 def test_e2e_2_reveal_con_profesor_devuelve_valor_y_audita():
@@ -121,6 +130,18 @@ def test_e2e_2_reveal_con_profesor_devuelve_valor_y_audita():
     assert row is not None, (
         "No se creó fila en pii_access_log después del reveal"
     )
+
+    # Limpieza
+    with engine.connect() as conn:
+        conn.execute(
+            text("DELETE FROM metrics.pii_access_log WHERE interaction_id = :iid"),
+            {"iid": interaction_id},
+        )
+        conn.execute(
+            text("DELETE FROM metrics.pii_vault WHERE interaction_id = :iid"),
+            {"iid": interaction_id},
+        )
+        conn.commit()
 
 
 # ── E2E-3: insert cifrado + decrypt real contra Postgres ───────────────────
