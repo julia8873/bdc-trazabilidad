@@ -566,11 +566,18 @@ def put_rubrica(curso_id: int, req: RubricaCreate, user: AuthenticatedUser = Dep
     last_rubrica = session.query(Rubrica).filter(Rubrica.curso_id == curso_id).order_by(desc(Rubrica.version)).first()
     next_version = 1 if not last_rubrica else last_rubrica.version + 1
     
+    criterios_dicts = []
+    for i, c in enumerate(req.criterios, 1):
+        c_dict = c.model_dump() if hasattr(c, "model_dump") else c.dict()
+        if not c_dict.get("nombre") or not c_dict["nombre"].strip():
+            c_dict["nombre"] = f"Criterio {i}"
+        criterios_dicts.append(c_dict)
+
     new_rubrica = Rubrica(
         curso_id=curso_id,
         version=next_version,
         instrucciones_agente=req.instrucciones_agente,
-        criterios=req.criterios
+        criterios=criterios_dicts
     )
     session.add(new_rubrica)
     session.commit()
