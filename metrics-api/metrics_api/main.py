@@ -336,7 +336,7 @@ def login(request: LoginRequest, response: Response, session: Session = Depends(
     try:
         m_res = requests.post(
             moodle_url, 
-            headers={"Host": "localhost:8082"}, # Host esperado por defecto en el dev local
+            headers={"Host": os.getenv("MOODLE_HOST_HEADER", "localhost:8000")}, # Host esperado por defecto en el dev local
             data={"username": request.username, "password": request.password, "service": "moodle_mobile_app"},
             timeout=5
         )
