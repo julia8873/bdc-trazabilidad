@@ -106,3 +106,17 @@ class InteraccionContenidoResponse(BaseModel):
 
 class ConceptosFrecuenciasResponse(BaseModel):
     conceptos: Dict[str, int]
+
+class RubricaCreate(BaseModel):
+    instrucciones_agente: Optional[str] = None
+    criterios: List[CriterioEvaluacion]
+
+class RubricaRead(BaseModel):
+    curso_id: int
+    version: int
+    instrucciones_agente: Optional[str] = None
+    criterios: List[CriterioEvaluacion]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

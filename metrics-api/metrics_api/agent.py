@@ -9,6 +9,10 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from typing import Dict, Any, Tuple, List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+
+from metrics_api.models import Rubrica
 
 from metrics_api.schemas import (
     AgentSummaryResponse, 
@@ -24,13 +28,43 @@ _SUMMARY_CACHE = {}
 
 AGENT_HMAC_SECRET = os.getenv("AGENT_HMAC_SECRET", "default_agent_hmac_secret_for_testing")
 
-def load_rubric() -> Dict:
+def load_global_rubric() -> Dict:
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "rubrica_evaluacion.yaml")
     try:
         with open(path, "r") as f:
             return yaml.safe_load(f)
     except Exception as e:
         return {"version_rubrica": "error", "criterios": [], "instrucciones_agente": ""}
+
+def get_rubrica_for_course(db: Session, curso_id: int) -> Dict:
+    rubrica = db.query(Rubrica).filter(Rubrica.curso_id == curso_id).order_by(desc(Rubrica.version)).first()
+    if rubrica:
+        return {
+            "version_rubrica": str(rubrica.version),
+            "instrucciones_agente": rubrica.instrucciones_agente or "",
+            "criterios": rubrica.criterios
+        }
+    return load_global_rubric()
+
+def clean_verdict(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    lower = text.lower()
+    # Filtramos lenguaje de veredicto
+    for word in ["aprobado", "suspenso", " apto", "no apto"]:
+        if word in lower:
+            return "Se detectó lenguaje de veredicto en la respuesta original; la evaluación no incluye juicios binarios."
+    return text
+
+def clean_verdict_dict(d: dict) -> dict:
+    for k, v in d.items():
+        if isinstance(v, str):
+            d[k] = clean_verdict(v)
+        elif isinstance(v, list):
+            d[k] = [clean_verdict(i) if isinstance(i, str) else clean_verdict_dict(i) if isinstance(i, dict) else i for i in v]
+        elif isinstance(v, dict):
+            d[k] = clean_verdict_dict(v)
+    return d
 
 def load_shared_config() -> Dict:
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "config.yaml")
@@ -41,13 +75,11 @@ def load_shared_config() -> Dict:
         return {}
 
 def load_llm_config() -> Dict:
-    # Read from llm-wiki-assistant config
-    path = "/home/julia/llm-wiki-assistant/config/config.yaml"
-    try:
-        with open(path, "r") as f:
-            return yaml.safe_load(f).get("llm", {})
-    except Exception:
-        return {}
+    shared_config = load_shared_config()
+    llm_cfg = shared_config.get("llm")
+    if not llm_cfg:
+        raise HTTPException(status_code=500, detail="Proveedor LLM no configurado")
+    return llm_cfg
 
 def generate_summary_hash(curso_id: int, alumno_id: int, summary_dict: dict) -> str:
     """Generate a secure HMAC hash of the summary to prevent tampering during follow-ups."""
@@ -90,6 +122,8 @@ async def get_github_diffs(repo_url: str) -> str:
     if len(parts) < 2:
         return ""
     owner, repo = parts[-2], parts[-1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
     
     headers = {
         "Authorization": f"Bearer {github_token}",
@@ -105,9 +139,6 @@ async def get_github_diffs(repo_url: str) -> str:
                 headers=headers,
                 params={"per_page": 10}
             )
-            if commits_resp.status_code == 404:
-                # Mock diff for demo purposes
-                return "diff --git a/ejercicio.py b/ejercicio.py\n+ def suma(a, b):\n+    return a + b\n"
             commits_resp.raise_for_status()
             commits = commits_resp.json()
             
@@ -128,19 +159,24 @@ async def get_github_diffs(repo_url: str) -> str:
                     diff_content += f"\n--- Commit: {commit_msg} ---\n"
                     diff_content += diff_resp.text[:2000] # truncate per commit
                     
-        except httpx.HTTPError:
-            pass # Return what we have or empty
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=500, detail=f"Fallo en la comunicación con el repositorio del alumno: {str(e)}")
             
     return diff_content
 
 async def invoke_llm(system_prompt: str, user_content: str, response_format=None) -> Any:
     llm_cfg = load_llm_config()
-    provider = llm_cfg.get("proveedor_activo", "gemini")
+    provider = llm_cfg.get("proveedor_activo")
+    
+    if not provider:
+        raise HTTPException(status_code=500, detail="LLM proveedor_activo no configurado.")
     
     if provider == "gemini":
         gemini_cfg = llm_cfg.get("gemini", {})
         api_key = os.getenv(gemini_cfg.get("api_key_env_var", "GEMINI_API_KEY"), gemini_cfg.get("api_key"))
-        model = gemini_cfg.get("modelo_defecto", "gemini-2.5-flash") # Use 2.5 that supports JSON
+        model = gemini_cfg.get("modelo_defecto")
+        if not model:
+            raise HTTPException(status_code=500, detail="Modelo LLM no configurado")
         base_url = gemini_cfg.get("api_base_url", "https://generativelanguage.googleapis.com/v1beta")
         
         url = f"{base_url}/models/{model}:generateContent?key={api_key}"
@@ -178,7 +214,7 @@ async def invoke_llm(system_prompt: str, user_content: str, response_format=None
         # Fallback or other providers not fully implemented for this phase snippet
         raise HTTPException(status_code=500, detail=f"LLM Provider {provider} not supported for JSON format yet")
 
-async def generar_resumen(curso_id: int, alumno_id: int) -> AgentSummaryResponse:
+async def generar_resumen(db: Session, curso_id: int, alumno_id: int) -> AgentSummaryResponse:
     if os.getenv("ENABLE_EVALUATION_AGENT", "false").lower() != "true":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
@@ -247,7 +283,7 @@ async def generar_resumen(curso_id: int, alumno_id: int) -> AgentSummaryResponse
         }
         return AgentSummaryResponse(estado="sin_actividad")
         
-    rubrica = load_rubric()
+    rubrica = get_rubrica_for_course(db, curso_id)
     version = rubrica.get("version_rubrica", "1.0")
     instrucciones = rubrica.get("instrucciones_agente", "")
     
@@ -270,6 +306,7 @@ Devuelve estrictamente un JSON con esta estructura exacta (no añadas nada más,
     
     # LLM Call
     llm_result = await invoke_llm(system_prompt, user_content, response_format="json")
+    llm_result = clean_verdict_dict(llm_result)
     
     summary_dict = {
         "estado": "evaluado",
@@ -312,6 +349,13 @@ async def seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpR
         raise HTTPException(status_code=400, detail="No existe un resumen activo para seguir la conversación.")
         
     cached_full = _SUMMARY_CACHE[cache_key]
+    
+    shared_config = load_shared_config()
+    ttl_min = shared_config.get("timings", {}).get("agent_summary_cache_ttl_min", 60)
+    now = time.time()
+    if now - cached_full["timestamp"] >= ttl_min * 60:
+        raise HTTPException(status_code=400, detail="Esta evaluación ha caducado, por favor genera un resumen nuevo.")
+
     cached = cached_full["summary"]
     hechos = cached_full.get("facts", [])
     
@@ -339,6 +383,7 @@ No inventes datos que no estuvieran en tu evaluación original o en los hechos a
     
     # LLM Call
     llm_result_text = await invoke_llm(system_prompt, user_content, response_format="text")
+    llm_result_text = clean_verdict(llm_result_text)
     
     new_history = req.historial + [
         AgentFollowUpMessage(rol="user", contenido=req.mensaje),

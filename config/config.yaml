@@ -1,20 +1,15 @@
-# ==============================================================================
-# CONFIG CENTRAL BDC-TRAZABILIDAD (bdc-trazabilidad/config/config.yaml)
-# Valores consolidados de tiempos y duración compartidos por todos los servicios.
-# ==============================================================================
-
+llm:
+  gemini:
+    api_base_url: https://generativelanguage.googleapis.com/v1beta
+    api_key_env_var: GEMINI_API_KEY
+    modelo_defecto: gemini-3.6-flash
+  proveedor_activo: gemini
 timings:
-  # Worker: intervalo de poll al feed de mapeo-api (Bucle 1)
-  poll_interval_sec: 15
-  # Worker: intervalo de auditoría completa de GitHub (Bucle 2)
-  reconciliation_interval_sec: 86400
-  # Batching para extracción de interacciones (Fase 11)
-  batching_interacciones_sec: 300
-  # metrics-api: duración del access token JWT
   access_token_expire_minutes: 15
-  # metrics-api: duración del refresh token
-  refresh_token_expire_days: 7
-  # Reservados para Fase 10
   agent_summary_cache_ttl_min: 60
-  fork_retention_days_after_course_close: 30
+  batching_interacciones_sec: 300
   fallback_retention_days_if_no_close_date: 180
+  fork_retention_days_after_course_close: 30
+  poll_interval_sec: 15
+  reconciliation_interval_sec: 86400
+  refresh_token_expire_days: 7

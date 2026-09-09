@@ -215,7 +215,29 @@ Ambas APIs (`mapeo-api` y `metrics-api`) retornan Problem Details para todos los
 }
 ```
 
-### 12.6 OpenAPI en Producción
-
 La documentación interactiva (`/docs`, `/redoc`, `/openapi.json`) se desactiva cuando `ENVIRONMENT=production`. Esta variable es **independiente** de `MOCK_SERVICES` — `MOCK_SERVICES=false` no implica entorno de producción (los tests True-E2E corren con `MOCK_SERVICES=false` en CI).
+
+---
+
+## 13. Agente de Evaluación y Rúbricas (Fase 14)
+
+**Estado: Completada**
+
+El sistema incorpora un Agente de Evaluación (LLM-as-Judge) en `bdc-trazabilidad` que analiza las interacciones del estudiante utilizando una rúbrica personalizable por curso.
+
+### 13.1 Credenciales y Roles
+- **Profesor:** Tiene permiso exclusivo (`user.is_teacher == True`) para crear y editar rúbricas personalizadas (asociadas a su curso) y para solicitar la generación o seguimiento (follow-up) de resúmenes de alumnos.
+- **Veredictos:** El agente está programado e instruido (vía *system prompt* y validación estática `clean_verdict`) para **NUNCA** emitir juicios binarios ni notas (como "Apto", "No Apto", "Aprobado", "Suspenso"). Su función es analizar de forma objetiva las fortalezas, patrones de uso y señales de alerta. El veredicto de evaluación final es responsabilidad exclusiva del profesor.
+
+### 13.2 TTL y Caché del Agente (Resumen)
+El agente utiliza un sistema de caché en memoria para los resúmenes y su contexto de seguimiento:
+- Por defecto, `agent_summary_cache_ttl_min` está configurado a 60 minutos.
+- El endpoint de seguimiento (`/seguimiento`) valida que este tiempo no haya sido superado. Si el resumen expira, devuelve un error 400 exigiendo la generación de un nuevo resumen.
+- Los resúmenes en caché se validan mediante un hash criptográfico (HMAC-SHA256 con `AGENT_HMAC_SECRET`) que garantiza que los datos en el historial (contexto) no han sido manipulados entre peticiones de seguimiento.
+
+### 13.3 Base de Datos (Rúbricas)
+Las rúbricas se almacenan en la tabla `metrics.rubricas` utilizando un patrón de diseño **append-only**:
+- La tabla tiene una restricción de unicidad en `(curso_id, version)`. Al modificar una rúbrica, se crea una nueva fila con `version + 1`.
+- El endpoint consulta automáticamente la rúbrica de mayor versión para un curso.
+- Si no existe una rúbrica personalizada para el curso en la base de datos, el agente recurre a la rúbrica global (configurada en `config/rubrica_evaluacion.yaml`) por defecto.
 

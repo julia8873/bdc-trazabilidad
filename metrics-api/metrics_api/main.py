@@ -21,7 +21,9 @@ from metrics_api.schemas import (
     StudentCourseItem,
     AgentSummaryResponse,
     AgentFollowUpRequest,
-    AgentFollowUpResponse
+    AgentFollowUpResponse,
+    RubricaRead,
+    RubricaCreate
 )
 from metrics_api.repository import (
     get_course_aggregates,
@@ -30,7 +32,7 @@ from metrics_api.repository import (
     get_interacciones_by_alumno,
     get_schema_version
 )
-from metrics_api.models import AuditoriaAcceso, RefreshToken
+from metrics_api.models import AuditoriaAcceso, RefreshToken, Rubrica
 
 class LoginRequest(BaseModel):
     """
@@ -96,6 +98,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
     return JSONResponse(
         status_code=500,
         content={"type": "about:blank", "title": "Internal Server Error", "status": 500, "detail": "Ocurrió un error inesperado", "instance": request.url.path}
@@ -244,11 +248,8 @@ async def get_student_metrics(response: Response, request: Request,
     total, by_type = get_student_aggregates(session, estudiante_id, curso_id)
     
     from metrics_api.agent import get_mapeo
-    try:
-        mapeo = await get_mapeo(curso_id, estudiante_id)
-        repo_url = mapeo.get("repo_url")
-    except:
-        repo_url = None
+    mapeo = await get_mapeo(curso_id, estudiante_id)
+    repo_url = mapeo.get("repo_url")
     
     return StudentMetricsResponse(
         student_id=estudiante_id,
@@ -351,16 +352,7 @@ def login(request: LoginRequest, response: Response, session: Session = Depends(
     except requests.RequestException:
         moodle_error = True
     
-    # Fallback para pruebas de interfaz si Moodle no tiene Web Services o está caído
-    if not moodle_authenticated and os.getenv("ENABLE_DEMO_AUTH", "false").lower() == "true":
-        if (request.username == "admin" and request.password in ("testpass", "admin")) or \
-           (request.username == "profesor1" and request.password == "Profesor1!") or \
-           (request.username == "profesor2" and request.password == "Profesor2!") or \
-           (request.username == "alumno1" and request.password == "Alumno1!") or \
-           (request.username == "alumno" and request.password == "alumno"):
-            moodle_authenticated = True
-            moodle_error = False # Se superó la prueba con el mock
-            
+
     if not moodle_authenticated:
         if moodle_error:
             raise HTTPException(status_code=503, detail="Moodle no disponible")
@@ -404,16 +396,7 @@ def login(request: LoginRequest, response: Response, session: Session = Depends(
         if m.get("moodle_user_id"):
             moodle_user_id = m.get("moodle_user_id")
 
-    # Inyectar mapeos mock si la base de datos está vacía (para pruebas UI)
-    if not allowed_courses:
-        if request.username in ("admin", "profesor1"):
-            allowed_courses = [1, 3]
-            is_teacher = True
-            moodle_user_id = 1 if request.username == "admin" else 99
-        elif request.username in ("alumno", "alumno1"):
-            allowed_courses = [1, 3]
-            is_teacher = False
-            moodle_user_id = 2 if request.username == "alumno" else 100
+
 
     auditoria = AuditoriaAcceso(
         moodle_username=request.username,
@@ -502,11 +485,7 @@ def refresh(request: Request, response: Response, session: Session = Depends(get
         raise HTTPException(status_code=503, detail="Error de backend")
         
     if not mapeos:
-        # Mock values para pruebas locales
-        if db_token.moodle_user_id == 1:
-            mapeos = [{"moodle_course_id": 1, "is_teacher": True, "moodle_username": "admin"}]
-        else:
-            mapeos = [{"moodle_course_id": 1, "is_teacher": False, "moodle_username": "alumno"}]
+        raise HTTPException(status_code=403, detail="El usuario no tiene cursos asignados")
             
     allowed_courses = [m["moodle_course_id"] for m in mapeos]
     is_teacher = any(m.get("is_teacher") for m in mapeos)
@@ -565,14 +544,52 @@ from metrics_api.agent import generar_resumen, seguimiento_resumen
 def get_capacidades():
     return {"ENABLE_EVALUATION_AGENT": os.getenv("ENABLE_EVALUATION_AGENT", "false").lower() == "true"}
 
-@app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/resumen", response_model=AgentSummaryResponse)
-async def api_generar_resumen(curso_id: int, alumno_id: int, user: AuthenticatedUser = Depends(verify_token)):
+@app.get("/v1/metrics/cursos/{curso_id}/rubrica", response_model=RubricaRead)
+def get_rubrica(curso_id: int, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
     verificar_permisos(curso_id, user)
-    return await generar_resumen(curso_id, alumno_id)
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden gestionar la rúbrica")
+    
+    from sqlalchemy import desc
+    rubrica = session.query(Rubrica).filter(Rubrica.curso_id == curso_id).order_by(desc(Rubrica.version)).first()
+    if not rubrica:
+        raise HTTPException(status_code=404, detail="Rubrica personalizada no encontrada")
+    return rubrica
+
+@app.put("/v1/metrics/cursos/{curso_id}/rubrica", response_model=RubricaRead)
+def put_rubrica(curso_id: int, req: RubricaCreate, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
+    verificar_permisos(curso_id, user)
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden gestionar la rúbrica")
+        
+    from sqlalchemy import desc
+    last_rubrica = session.query(Rubrica).filter(Rubrica.curso_id == curso_id).order_by(desc(Rubrica.version)).first()
+    next_version = 1 if not last_rubrica else last_rubrica.version + 1
+    
+    new_rubrica = Rubrica(
+        curso_id=curso_id,
+        version=next_version,
+        instrucciones_agente=req.instrucciones_agente,
+        criterios=req.criterios
+    )
+    session.add(new_rubrica)
+    session.commit()
+    session.refresh(new_rubrica)
+    return new_rubrica
+
+
+@app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/resumen", response_model=AgentSummaryResponse)
+async def api_generar_resumen(curso_id: int, alumno_id: int, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
+    verificar_permisos(curso_id, user)
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden ver el resumen")
+    return await generar_resumen(session, curso_id, alumno_id)
 
 @app.post("/v1/metrics/cursos/{curso_id}/estudiantes/{alumno_id}/resumen/seguimiento", response_model=AgentFollowUpResponse)
 async def api_seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpRequest, user: AuthenticatedUser = Depends(verify_token)):
     verificar_permisos(curso_id, user)
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden hacer seguimiento")
     return await seguimiento_resumen(curso_id, alumno_id, req)
 
 
@@ -627,8 +644,8 @@ async def _trigger_reconciliation_for_student(
                     if 'rel="next"' in part:
                         next_url = part[part.index("<") + 1: part.index(">")]
                 url = next_url
-    except Exception:
-        return {"synced": 0, "discrepancias": 0}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Fallo de comunicación con GitHub: {str(e)}")
 
     from metrics_api.models import Interaccion
 
@@ -934,11 +951,8 @@ async def get_interacciones_metadatos(
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
         
-    try:
-        mapeo = await get_mapeo(curso_id, alumno_id)
-        repo_url = mapeo.get("repo_url")
-    except Exception:
-        repo_url = None
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
     if not repo_url:
         return PaginatedInteraccionesMetadatos(items=[], total=0, limit=limit, offset=offset)
         
@@ -1049,11 +1063,8 @@ async def get_interaccion_contenido(
     if not user.is_teacher and user.moodle_user_id != alumno_id:
         raise HTTPException(status_code=403, detail="No puedes ver esto")
         
-    try:
-        mapeo = await get_mapeo(curso_id, alumno_id)
-        repo_url = mapeo.get("repo_url")
-    except Exception:
-        repo_url = None
+    mapeo = await get_mapeo(curso_id, alumno_id)
+    repo_url = mapeo.get("repo_url")
     if not repo_url:
         raise HTTPException(status_code=404, detail="Repo no encontrado")
         

@@ -4,6 +4,7 @@ import { apiClient } from '../lib/apiClient';
 import type { CourseMetrics, PaginatedInteractions } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Activity, Users, BarChart3, RefreshCw, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { RubricEditor } from './RubricEditor';
 
 interface StudentCourseItem {
   moodle_user_id: number;
@@ -490,6 +491,9 @@ export const CourseDashboard: React.FC = () => {
         )}
       </div>
       </div>
+      
+      {/* ── Editor de Rúbrica ────────────────────────────────────────────── */}
+      <RubricEditor courseId={courseId!} />
     </div>
   );
 };
