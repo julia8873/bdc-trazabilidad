@@ -832,22 +832,30 @@ async def api_sync_course(
     total_discrepancias = 0
     students_processed = 0
 
+    errores = []
     for mapeo in mapeos:
         if mapeo.get("is_teacher"):
             continue
         uid = mapeo.get("moodle_user_id")
         if uid not in unsynced_ids:
             continue
-        result = await _trigger_reconciliation_for_student(mapeo, session, user.moodle_user_id)
-        total_synced += result["synced"]
-        total_discrepancias += result["discrepancias"]
-        students_processed += 1
+        try:
+            result = await _trigger_reconciliation_for_student(mapeo, session, user.moodle_user_id)
+            total_synced += result["synced"]
+            total_discrepancias += result["discrepancias"]
+            students_processed += 1
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            error_detail = getattr(e, "detail", str(e))
+            errores.append({"moodle_user_id": uid, "error": error_detail})
 
     return {
-        "status": "ok",
+        "status": "ok" if not errores else "partial",
         "students_processed": students_processed,
         "commits_checked": total_synced,
-        "new_discrepancias": total_discrepancias
+        "new_discrepancias": total_discrepancias,
+        "errores": errores
     }
 
 
