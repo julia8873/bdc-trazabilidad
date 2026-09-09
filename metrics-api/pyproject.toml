@@ -19,5 +19,7 @@ dependencies = [
     "uvicorn[standard]>=0.28.0",
     "pydantic>=2.0",
     "httpx>=0.25.0",
-    "PyJWT>=2.8.0"
+    "PyJWT>=2.8.0",
+    "cryptography>=41.0.0",
+    "apscheduler>=3.10.0"
 ]

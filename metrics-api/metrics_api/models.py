@@ -232,3 +232,33 @@ class Rubrica(Base):
     instrucciones_agente = Column(String, nullable=True)
     criterios = Column(JSONB, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class PiiVault(Base):
+    """
+    Almacén seguro de valores PII originales cifrados.
+    """
+    __tablename__ = "pii_vault"
+    __table_args__ = {"schema": "metrics"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_matrix_id = Column(String, index=True, nullable=False)
+    interaction_id = Column(String, index=True, nullable=False)
+    token = Column(String, nullable=False) # ej. [PERSON_1]
+    raw_value_encrypted = Column(String, nullable=False) # Valor original cifrado (Fernet text)
+    entity_type = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+class PiiAccessLog(Base):
+    """
+    Registro inmutable de accesos al endpoint de revelación de PII.
+    """
+    __tablename__ = "pii_access_log"
+    __table_args__ = {"schema": "metrics"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    moodle_username = Column(String, index=True, nullable=False)
+    token_requested = Column(String, nullable=False)
+    interaction_id = Column(String, nullable=False)
+    client_ip = Column(String, nullable=True)

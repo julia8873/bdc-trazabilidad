@@ -21,6 +21,8 @@ services:
       - MAPEO_API_URL=http://moodle-matrix-dev-mapeo-api-1:8000
       - ENABLE_DEMO_AUTH=true
       - ENVIRONMENT=dev
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - PII_SECRET_KEY=${PII_SECRET_KEY}
     env_file:
       - .env
 

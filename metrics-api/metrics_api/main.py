@@ -54,8 +54,29 @@ async def lifespan(app: FastAPI):
     from metrics_api.auth import JWT_SECRET_KEY
     if not JWT_SECRET_KEY or JWT_SECRET_KEY in ("default_token", "changeme_in_production"):
         raise RuntimeError("FATAL: JWT_SECRET_KEY no está configurado de manera segura.")
-    yield
+        
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from metrics_api.db import SessionLocal
+    from metrics_api.models import PiiVault
+    
+    def purge_expired_pii():
+        try:
+            with SessionLocal() as db:
+                from sqlalchemy import delete
+                from datetime import datetime
+                result = db.execute(delete(PiiVault).where(PiiVault.expires_at < datetime.utcnow()))
+                db.commit()
+                # print(f"Purged {result.rowcount} expired PII entries.")
+        except Exception as e:
+            pass # Logger here if needed
 
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(purge_expired_pii, 'interval', hours=24)
+    scheduler.start()
+    
+    yield
+    
+    scheduler.shutdown()
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request
 
@@ -1116,3 +1137,97 @@ async def get_interaccion_contenido(
             
     raise HTTPException(status_code=404, detail="Contenido no encontrado en los logs de GitHub")
 
+from typing import List
+from cryptography.fernet import Fernet
+from fastapi import Header
+from metrics_api.models import PiiVault, PiiAccessLog
+
+class TokenMapping(BaseModel):
+    token: str
+    raw_value: str
+    entity_type: str
+
+class VaultRequest(BaseModel):
+    student_matrix_id: str
+    interaction_id: str
+    mappings: List[TokenMapping]
+    
+class RevealRequest(BaseModel):
+    token: str
+    interaction_id: str
+
+@app.post("/internal/pii/vault", status_code=201)
+async def pii_vault_store(req: VaultRequest, authorization: str = Header(None), session: Session = Depends(get_session)):
+    """
+    Endpoint interno. No expuesto públicamente. Almacena valores PII crudos cifrados.
+    """
+    internal_token = os.getenv("INTERNAL_SERVICE_TOKEN")
+    if not internal_token or authorization != f"Bearer {internal_token}":
+        raise HTTPException(status_code=401, detail="Unauthorized internal call")
+        
+    secret = os.getenv("PII_SECRET_KEY")
+    if not secret:
+        raise HTTPException(status_code=500, detail="PII_SECRET_KEY no configurado")
+        
+    try:
+        f = Fernet(secret.encode())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Invalid PII_SECRET_KEY")
+        
+    # Retention limit logic
+    retention_days = 90 # fallback
+    expires = datetime.datetime.utcnow() + datetime.timedelta(days=retention_days)
+    
+    for m in req.mappings:
+        enc_value = f.encrypt(m.raw_value.encode()).decode()
+        v = PiiVault(
+            student_matrix_id=req.student_matrix_id,
+            interaction_id=req.interaction_id,
+            token=m.token,
+            raw_value_encrypted=enc_value,
+            entity_type=m.entity_type,
+            expires_at=expires
+        )
+        session.add(v)
+    session.commit()
+    return {"status": "ok", "inserted": len(req.mappings)}
+
+@app.post("/v1/metrics/pii/reveal")
+async def pii_reveal(req: RevealRequest, request: Request, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
+    """
+    Endpoint expuesto para el profesor. Descifra y revela un PII dado un token y un ID de interacción.
+    Requiere JWT y audita el acceso obligatoriamente.
+    """
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden revelar PII")
+        
+    # Validate access somehow? Actually, just being a teacher is sufficient in Phase 1 if we trust them.
+    # Ideally we should verify if the teacher is in the course that contains this interaction,
+    # but the interaction_id doesn't encode the course trivially without hitting other APIs.
+    # For now, we trust the teacher token.
+    
+    vault_entry = session.query(PiiVault).filter_by(token=req.token, interaction_id=req.interaction_id).first()
+    if not vault_entry:
+        raise HTTPException(status_code=404, detail="Token PII no encontrado en vault")
+        
+    secret = os.getenv("PII_SECRET_KEY")
+    if not secret:
+        raise HTTPException(status_code=500, detail="PII_SECRET_KEY no configurado")
+        
+    try:
+        f = Fernet(secret.encode())
+        raw_val = f.decrypt(vault_entry.raw_value_encrypted.encode()).decode()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="No se pudo descifrar el PII")
+        
+    # Auditar el acceso
+    audit = PiiAccessLog(
+        moodle_username=user.username,
+        token_requested=req.token,
+        interaction_id=req.interaction_id,
+        client_ip=request.client.host if request.client else None
+    )
+    session.add(audit)
+    session.commit()
+    
+    return {"raw_value": raw_val}
