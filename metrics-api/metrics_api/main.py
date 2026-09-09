@@ -1222,7 +1222,7 @@ async def pii_reveal(req: RevealRequest, request: Request, user: AuthenticatedUs
         
     # Auditar el acceso
     audit = PiiAccessLog(
-        moodle_username=user.username,
+        moodle_username=user.moodle_username,
         token_requested=req.token,
         interaction_id=req.interaction_id,
         client_ip=request.client.host if request.client else None
