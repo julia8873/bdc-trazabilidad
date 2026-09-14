@@ -19,6 +19,43 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState(false);
+  
+  const [globalRubrica, setGlobalRubrica] = useState<Rubrica | null>(null);
+  const [showGlobal, setShowGlobal] = useState(false);
+
+  useEffect(() => {
+    fetchGlobalRubric();
+  }, []);
+
+  const fetchGlobalRubric = async () => {
+    try {
+      const res = await apiClient(`/v1/metrics/rubrica-global`);
+      if (res.ok) {
+        const data = await res.json();
+        setGlobalRubrica(data);
+      }
+    } catch (e) {
+      console.error("No se pudo cargar rúbrica global", e);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm("¿Seguro que quieres restablecer la rúbrica a los valores por defecto? Esto borrará tus cambios personalizados.")) return;
+    setLoading(true);
+    try {
+      const res = await apiClient(`/v1/metrics/cursos/${courseId}/rubrica`, { method: 'DELETE' });
+      if (res.ok) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+        setRubrica(null); // Force UI update
+        await fetchRubric(); 
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Draft state
   const [instrucciones, setInstrucciones] = useState('');
@@ -52,6 +89,9 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
     if (rubrica) {
       setInstrucciones(rubrica.instrucciones_agente || '');
       setCriterios(rubrica.criterios || []);
+    } else if (globalRubrica) {
+      setInstrucciones(globalRubrica.instrucciones_agente || '');
+      setCriterios(globalRubrica.criterios || []);
     } else {
       setInstrucciones(`Eres un asistente de evaluación para el curso NBT. Debes evaluar el desempeño de los alumnos basándote en los criterios definidos a continuación.`);
       setCriterios([]);
@@ -113,7 +153,21 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
               <Edit3 size={16} /> Crear Rúbrica
             </button>
          </div>
-         <p style={{ color: 'var(--text-muted)' }}>Este curso utiliza la rúbrica global por defecto. Crea una personalizada para este curso.</p>
+         <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Este curso utiliza la rúbrica global por defecto. Crea una personalizada para este curso.</p>
+         {globalRubrica && (
+           <div style={{ padding: '1rem', backgroundColor: 'var(--bg-highlight)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+             <h4 style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>Prompt por Defecto (Global)</h4>
+             <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{globalRubrica.instrucciones_agente}</p>
+             <div className="mt-3">
+                <strong style={{ fontSize: '0.85rem' }}>Criterios globales:</strong>
+                <ul style={{ paddingLeft: '1.25rem', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                   {globalRubrica.criterios.map((c, idx) => (
+                     <li key={idx} style={{ marginBottom: '0.25rem' }}><strong>{c.nombre}:</strong> {c.observacion || (c as any).descripcion}</li>
+                   ))}
+                </ul>
+             </div>
+           </div>
+         )}
       </div>
     );
   }
@@ -123,9 +177,19 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
       <div className="flex justify-between items-center mb-4">
         <h3 style={{ margin: 0 }}>{rubrica?.version ? `Rúbrica de Evaluación (Versión ${rubrica.version})` : 'Rúbrica de Evaluación'}</h3>
         {!isEditing ? (
-          <button className="btn-ghost flex items-center gap-2" onClick={handleEdit}>
-            <Edit3 size={16} /> Editar
-          </button>
+          <div className="flex gap-2">
+            {rubrica && (
+              <button className="btn-ghost flex items-center gap-2" onClick={handleReset} style={{color: 'var(--danger)'}}>
+                <Trash2 size={16} /> Restablecer
+              </button>
+            )}
+            <button className="btn-ghost flex items-center gap-2" onClick={() => setShowGlobal(!showGlobal)}>
+               {showGlobal ? "Ocultar" : "Ver"} prompt por defecto
+            </button>
+            <button className="btn-ghost flex items-center gap-2" onClick={handleEdit}>
+              <Edit3 size={16} /> Editar
+            </button>
+          </div>
         ) : (
           <div className="flex gap-2">
             <button className="btn-ghost flex items-center gap-2" onClick={handleCancel}>
@@ -141,6 +205,21 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
       {error && <div style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</div>}
       {success && <div style={{ color: 'var(--success)', marginBottom: '1rem' }}>Rúbrica actualizada.</div>}
 
+      {showGlobal && globalRubrica && !isEditing && (
+        <div className="mb-4" style={{ padding: '1rem', backgroundColor: 'var(--bg-highlight)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+          <h4 style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>Prompt por Defecto (Global)</h4>
+          <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{globalRubrica.instrucciones_agente}</p>
+          <div className="mt-3">
+             <strong style={{ fontSize: '0.85rem' }}>Criterios globales:</strong>
+             <ul style={{ paddingLeft: '1.25rem', fontSize: '0.85rem' }}>
+                {globalRubrica.criterios.map((c, idx) => (
+                  <li key={idx}><strong>{c.nombre}:</strong> {c.observacion || (c as any).descripcion}</li>
+                ))}
+             </ul>
+          </div>
+        </div>
+      )}
+
       {!isEditing ? (
         <div>
           <div className="mb-4">
@@ -152,7 +231,7 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
             <ul style={{ listStyleType: 'disc', paddingLeft: '1.25rem' }}>
               {rubrica?.criterios?.map((c, i) => {
                 const name = c.nombre?.trim();
-                const obs = c.observacion?.trim();
+                const obs = (c.observacion || (c as any).descripcion)?.trim();
                 
                 if (!name && obs) {
                   return (
@@ -211,7 +290,7 @@ export const RubricEditor: React.FC<{ courseId: string }> = ({ courseId }) => {
                 />
                 <textarea
                   placeholder="Observación"
-                  value={c.observacion}
+                  value={c.observacion || (c as any).descripcion || ''}
                   onChange={(e) => updateCriterio(i, 'observacion', e.target.value)}
                   style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-main)', width: '60%' }}
                 />

@@ -171,6 +171,9 @@ export const StudentProfile: React.FC = () => {
   const handleGenerateSummary = async () => {
     try {
       setAgentLoading(true); setAgentError('');
+      // Reset chat history: new evaluation produces a new resumen_hash,
+      // which makes any previous follow-up conversation incompatible.
+      setChatHistory([]);
       const res = await apiClient(`/v1/metrics/cursos/${courseId}/estudiantes/${studentId}/resumen`, { method: 'POST' });
       if (res.status === 503) { setAgent503(true); return; }
       if (!res.ok) throw new Error('Error al generar resumen');
@@ -386,9 +389,24 @@ export const StudentProfile: React.FC = () => {
       {/* Panel 3: Evaluación IA */}
       {activeTab === 'ai' && (
         <div id="tab-panel-ai" className="card animate-fade-in hover-lift" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="flex items-center gap-2">
-            <Cpu size={20} color="var(--primary)" />
-            <h3 style={{ margin: 0 }}>Evaluación Asistida por IA</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cpu size={20} color="var(--primary)" />
+              <h3 style={{ margin: 0 }}>Evaluación Asistida por IA</h3>
+            </div>
+            {agentSummary && !agent503 && (
+              <button
+                id="btn-reevaluar"
+                className="btn-secondary"
+                onClick={handleGenerateSummary}
+                disabled={agentLoading}
+                title="Reevaluar con las conversaciones más recientes"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+              >
+                <RefreshCw size={14} className={agentLoading ? 'animate-spin' : ''} />
+                {agentLoading ? 'Reevaluando…' : 'Reevaluar'}
+              </button>
+            )}
           </div>
 
           {agent503 ? (
@@ -402,24 +420,63 @@ export const StudentProfile: React.FC = () => {
                   Este alumno no tiene suficiente actividad registrada para generar un resumen.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div style={{ padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle size={16} color="var(--success)" />
-                      <strong>Fortalezas</strong>
-                    </div>
-                    <ul style={{ paddingLeft: '1.25rem', fontSize: '0.875rem', margin: 0 }}>
-                      {agentSummary.fortalezas.map((f, i) => <li key={i}>{f}</li>)}
-                    </ul>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  {/* Sección Criterios */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    {agentSummary.criterios_fortalezas && agentSummary.criterios_fortalezas.length > 0 && (
+                      <div style={{ padding: '1.25rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', border: '1px solid var(--success)' }}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <CheckCircle size={18} color="var(--success)" />
+                          <strong style={{ fontSize: '1.1rem' }}>Criterios (Fortalezas)</strong>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          {agentSummary.criterios_fortalezas.map((c, i) => (
+                            <div key={i} style={{ borderLeft: '3px solid var(--success)', paddingLeft: '1rem' }}>
+                              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{c.nombre}</div>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{c.observacion}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {agentSummary.criterios_alertas && agentSummary.criterios_alertas.length > 0 && (
+                      <div style={{ padding: '1.25rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', border: '1px solid var(--danger)' }}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <AlertTriangle size={18} color="var(--danger)" />
+                          <strong style={{ fontSize: '1.1rem' }}>Criterios (Alertas)</strong>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          {agentSummary.criterios_alertas.map((c, i) => (
+                            <div key={i} style={{ borderLeft: '3px solid var(--danger)', paddingLeft: '1rem' }}>
+                              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{c.nombre}</div>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{c.observacion}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)' }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertTriangle size={16} color="var(--danger)" />
-                      <strong>Señales de Alerta</strong>
+
+                  {/* Sección General */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div style={{ padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle size={16} color="var(--success)" />
+                        <strong>Fortalezas (General)</strong>
+                      </div>
+                      <ul style={{ paddingLeft: '1.25rem', fontSize: '0.875rem', margin: 0 }}>
+                        {agentSummary.fortalezas.map((f, i) => <li key={i} style={{ marginBottom: '0.5rem' }}>{f}</li>)}
+                      </ul>
                     </div>
-                    <ul style={{ paddingLeft: '1.25rem', fontSize: '0.875rem', margin: 0 }}>
-                      {agentSummary.senales_alerta.map((f, i) => <li key={i} style={{ color: 'var(--danger)' }}>{f}</li>)}
-                    </ul>
+                    <div style={{ padding: '1rem', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle size={16} color="var(--danger)" />
+                        <strong>Señales de Alerta (General)</strong>
+                      </div>
+                      <ul style={{ paddingLeft: '1.25rem', fontSize: '0.875rem', margin: 0 }}>
+                        {agentSummary.senales_alerta.map((f, i) => <li key={i} style={{ color: 'var(--danger)', marginBottom: '0.5rem' }}>{f}</li>)}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}

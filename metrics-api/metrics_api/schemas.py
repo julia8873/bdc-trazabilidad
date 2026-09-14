@@ -67,7 +67,8 @@ class CriterioEvaluacion(BaseModel):
 
 class AgentSummaryResponse(BaseModel):
     estado: Literal["evaluado", "sin_actividad"]
-    criterios: List[CriterioEvaluacion] = []
+    criterios_fortalezas: List[CriterioEvaluacion] = []
+    criterios_alertas: List[CriterioEvaluacion] = []
     fortalezas: List[str] = []
     patrones_uso: List[str] = []
     senales_alerta: List[str] = []

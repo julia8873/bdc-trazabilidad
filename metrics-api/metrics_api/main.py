@@ -577,6 +577,23 @@ def get_rubrica(curso_id: int, user: AuthenticatedUser = Depends(verify_token), 
         raise HTTPException(status_code=404, detail="Rubrica personalizada no encontrada")
     return rubrica
 
+@app.delete("/v1/metrics/cursos/{curso_id}/rubrica")
+def delete_rubrica(curso_id: int, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
+    verificar_permisos(curso_id, user)
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden gestionar la rúbrica")
+    
+    session.query(Rubrica).filter(Rubrica.curso_id == curso_id).delete()
+    session.commit()
+    return {"status": "ok"}
+
+from metrics_api.agent import load_global_rubric
+@app.get("/v1/metrics/rubrica-global")
+def get_rubrica_global(user: AuthenticatedUser = Depends(verify_token)):
+    if not user.is_teacher:
+        raise HTTPException(status_code=403, detail="Solo profesores pueden ver la rúbrica global")
+    return load_global_rubric()
+
 @app.put("/v1/metrics/cursos/{curso_id}/rubrica", response_model=RubricaRead)
 def put_rubrica(curso_id: int, req: RubricaCreate, user: AuthenticatedUser = Depends(verify_token), session: Session = Depends(get_session)):
     verificar_permisos(curso_id, user)

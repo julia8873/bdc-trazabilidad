@@ -293,9 +293,12 @@ async def generar_resumen(db: Session, curso_id: int, alumno_id: int) -> AgentSu
 Rúbrica de Criterios:
 {json.dumps(rubrica.get('criterios', []), ensure_ascii=False, indent=2)}
 
+IMPORTANTE: Cuando incluyas un punto en "fortalezas" o "senales_alerta" que esté directamente relacionado con un criterio de la rúbrica, debes referenciar el nombre de dicho criterio explícitamente en el texto.
+
 Devuelve estrictamente un JSON con esta estructura exacta (no añadas nada más, no uses notas numéricas):
 {{
-  "criterios": [{{"nombre": "nombre_criterio", "observacion": "texto"}}],
+  "criterios_fortalezas": [{{"nombre": "nombre_criterio", "observacion": "texto"}}],
+  "criterios_alertas": [{{"nombre": "nombre_criterio", "observacion": "texto"}}],
   "fortalezas": ["texto"],
   "patrones_uso": ["texto"],
   "senales_alerta": ["texto"]
@@ -310,7 +313,8 @@ Devuelve estrictamente un JSON con esta estructura exacta (no añadas nada más,
     
     summary_dict = {
         "estado": "evaluado",
-        "criterios": llm_result.get("criterios", []),
+        "criterios_fortalezas": llm_result.get("criterios_fortalezas", []),
+        "criterios_alertas": llm_result.get("criterios_alertas", []),
         "fortalezas": llm_result.get("fortalezas", []),
         "patrones_uso": llm_result.get("patrones_uso", []),
         "senales_alerta": llm_result.get("senales_alerta", []),
@@ -357,13 +361,27 @@ async def seguimiento_resumen(curso_id: int, alumno_id: int, req: AgentFollowUpR
         raise HTTPException(status_code=400, detail="Esta evaluación ha caducado, por favor genera un resumen nuevo.")
 
     cached = cached_full["summary"]
-    hechos = cached_full.get("facts", [])
-    
+
     # Verify hash
     expected_hash = cached.get("resumen_hash")
     # If there is no hash expected (e.g. sin_actividad) or the hash doesn't match
     if expected_hash and not hmac.compare_digest(expected_hash, req.resumen_hash):
         raise HTTPException(status_code=400, detail="El hash del resumen no coincide o la conversación ha sido manipulada.")
+
+    # Always fetch fresh facts from GitHub so the agent sees interactions that
+    # happened *after* the summary was generated (e.g. new student messages).
+    # Fall back to the snapshot cached at evaluation time if the live fetch fails.
+    from metrics_api.main import get_all_jsonls_from_dir
+    try:
+        mapeo = await get_mapeo(curso_id, alumno_id)
+        repo_url = mapeo.get("repo_url")
+        if repo_url:
+            hechos = await get_all_jsonls_from_dir(repo_url, "logs/interacciones")
+        else:
+            hechos = cached_full.get("facts", [])
+    except Exception:
+        # Network / GitHub error: degrade gracefully using the cached snapshot
+        hechos = cached_full.get("facts", [])
         
     system_prompt = """Eres el mismo asistente que evaluó al estudiante. 
 Responde de forma concisa y directa a la pregunta del profesor sobre la evaluación.

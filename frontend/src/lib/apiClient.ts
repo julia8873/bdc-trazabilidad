@@ -17,21 +17,22 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
   }
 
   const token = currentAccessToken;
-  
+
   const config = {
     ...options,
     credentials: 'include' as RequestCredentials,
     headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     }
   };
 
   const response = await fetch(url, config);
-  
+
   if (response.status === 401 && !url.includes('/v1/token') && !url.includes('/v1/refresh')) {
     window.dispatchEvent(new CustomEvent('auth-unauthorized'));
   }
-  
+
   return response;
 };

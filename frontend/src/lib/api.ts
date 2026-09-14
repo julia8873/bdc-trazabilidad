@@ -85,7 +85,8 @@ export interface CriterioEvaluacion {
 
 export interface AgentSummaryResponse {
   estado: "evaluado" | "sin_actividad";
-  criterios: CriterioEvaluacion[];
+  criterios_fortalezas: CriterioEvaluacion[];
+  criterios_alertas: CriterioEvaluacion[];
   fortalezas: string[];
   patrones_uso: string[];
   senales_alerta: string[];
